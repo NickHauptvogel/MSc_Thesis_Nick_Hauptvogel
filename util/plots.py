@@ -305,9 +305,9 @@ def create_table_results(path, epoch_budget_folder, use_case, model_type):
 
 
 if __name__ == '__main__':
-    #path = 'results/cifar10/resnet110/'
-    path = r"C:\Users\NHaup\OneDrive\Dokumente\Master_Studium\Semester_4\Thesis\Results\imdb"
-    use_case = 'imdb'
+    path = r'C:\Users\NHaup\Projects\Results\cifar10\resnet110'
+    #path = r"C:\Users\NHaup\OneDrive\Dokumente\Master_Studium\Semester_4\Thesis\Results\imdb"
+    use_case = 'cifar10'
     model_type = 'ResNet110v1'
     create_table_results(path, '03', use_case, model_type)
     #plot_lr_loss(path, only_first=True)
