@@ -234,7 +234,7 @@ if use_case == 'cifar10' or use_case == 'cifar100':
     test_loader_x_only = test_datagen.flow(x_test, batch_size=batch_size, shuffle=False)
 
 elif use_case == 'retinopathy':
-    dataset_path = '../../Datasets/Diabetic_Retinopathy'
+    dataset_path = '../Datasets/Diabetic_Retinopathy'
     # Load the retinopathy data.
     num_classes = 1
     target_size = (image_size, image_size)
