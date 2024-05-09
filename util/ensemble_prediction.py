@@ -134,13 +134,13 @@ def get_use_case_data(use_case: str, model_type: str = None):
             ylim_loss = (0.15, 1.)
             baseline_acc = [0.9363]
             baseline_loss = [0.217]
-            baseline_name = ['cSGHMC-ap[27] (Wenzel)']
+            baseline_name = ['cSGHMC-ap[27]']
         elif model_type == 'ResNet110v1':
             baseline_acc = [0.9554, 0.9637, 0.9531]
-            baseline_name = ['SWAG[10] (Ashukha)', 'DE[10] (Ashukha)', 'SGD (Ashukha)']
+            baseline_name = ['SWAG[10]', 'DE[10]', 'SGD']
         elif model_type == 'WideResNet28-10':
             baseline_acc = [0.9666, 0.9699, 0.963]
-            baseline_name = ['SWAG[10] (Ashukha)', 'DE[10] (Ashukha)', 'SGD (Ashukha)']
+            baseline_name = ['SWAG[10]', 'DE[10]', 'SGD']
     elif use_case == 'cifar100':
         ylim = (0.75, 0.84)
         num_classes = 100
@@ -148,14 +148,14 @@ def get_use_case_data(use_case: str, model_type: str = None):
         y_test = y_test[:, 0]
         if model_type == 'ResNet110v1':
             baseline_acc = [0.7808, 0.8241, 0.7734]
-            baseline_name = ['cSGLD[10] (Ashukha)', 'DE[10] (Ashukha)', 'SGD (Ashukha)']
+            baseline_name = ['cSGLD[10]', 'DE[10]', 'SGD']
         elif model_type == 'WideResNet28-10':
             baseline_acc = [0.8279, 0.8383, 0.8069]
-            baseline_name = ['SWAG[10] (Ashukha)', 'DE[10] (Ashukha)', 'SGD (Ashukha)']
+            baseline_name = ['SWAG[10]', 'DE[10]', 'SGD']
     elif use_case == 'imdb':
         baseline_acc = [0.8703]
         baseline_loss = [0.3044]
-        baseline_name = ['cSGHMC-ap[7] (Wenzel)']
+        baseline_name = ['cSGHMC-ap[7]']
         ylim = (0.83, 0.88)
         ylim_loss = (0.25, 1.0)
         num_classes = 1
@@ -165,7 +165,7 @@ def get_use_case_data(use_case: str, model_type: str = None):
     elif use_case == 'retinopathy':
         dataset_path = '../Datasets/Diabetic_Retinopathy'
         baseline_acc = [0.886, 0.903, 0.909, 0.916]
-        baseline_name = ['MAP (Band)', 'DE[3] (Band)', 'MC-Dr. (Band)', 'MC-Dr.[3] (Band)']
+        baseline_name = ['MAP', 'DE[3]', 'MC-Dr.', 'MC-Dr.[3]']
         ylim = (0.86, 0.92)
         num_classes = 1
         y_test = ImageDataGenerator().flow_from_directory(f'{dataset_path}/test', shuffle=False,
@@ -383,145 +383,146 @@ def create_plots(use_case_data,
     else:
         every_ = 1
 
-    figsize = (9, 6)
+    for f, figsize in [(folder, (9, 6)), (os.path.join(folder, 'small'), (5, 3))]:
+        os.makedirs(f, exist_ok=True)
 
-    # Plot the results
-    for plot_majority_vote in [True, False]:
+        # Plot the results
+        for plot_majority_vote in [True, False]:
+            fig, ax = plt.subplots(1, 1, figsize=figsize)
+            plt.setp(ax.spines.values(), color='#DDDDDD')
+            ax.grid(which='major', color='#DDDDDD', linewidth=0.8, zorder=0)
+            ax.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.5)
+            ax.minorticks_on()
+
+            min_mean = best_single_model_accuracy
+            color_counter = 0
+            for category in categories:
+                ensemble_accs_mean, ensemble_accs_std, _, _, _, _ = results[category]
+                ensemble_accs_mean = np.array(ensemble_accs_mean)
+                ensemble_accs_std = np.array(ensemble_accs_std)
+
+                if min_mean is None or min_mean > np.min(ensemble_accs_mean[:, 2]):
+                    min_mean = np.min(ensemble_accs_mean[:, 2])
+
+                # Get a color
+                color = colors[color_counter]
+                color_counter = (color_counter + 1) % len(colors)
+                if plot_majority_vote:
+                    plt.plot(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 2], label=f'{display_categories[category]}',color=color)
+                    plt.plot(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 1], color=color, linestyle='--')
+                    # Std as area around the mean
+                    plt.fill_between(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 1] - ensemble_accs_std[:, 1],
+                                     ensemble_accs_mean[:, 1] + ensemble_accs_std[:, 1], alpha=0.3, color=color, zorder=3)
+                    plt.fill_between(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 2] - ensemble_accs_std[:, 2],
+                                     ensemble_accs_mean[:, 2] + ensemble_accs_std[:, 2], alpha=0.3, color=color, zorder=3)
+                else:
+                    plt.plot(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 2],
+                             label=f'{display_categories[category]}', color=color)
+                    # Std as area around the mean
+                    plt.fill_between(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 2] - ensemble_accs_std[:, 2],
+                                     ensemble_accs_mean[:, 2] + ensemble_accs_std[:, 2], alpha=0.3, color=color, zorder=3)
+            plt.xlabel('Ensemble size')
+            plt.ylabel('Accuracy')
+            ylim = (max(min_mean - 0.005, use_case_data['ylim'][0]), use_case_data['ylim'][1])
+            plt.ylim(ylim)
+            # Horizontal line for the accuracy of the best model
+            if best_single_model_accuracy is not None:
+                plt.axhline(best_single_model_accuracy, color='orange', linestyle='--', label='Best SGD')
+            if use_case_data['baseline_acc'] is not None:
+                # Horizontal line for baseline accuracy
+                for i, (acc, name) in enumerate(zip(use_case_data['baseline_acc'], use_case_data['baseline_name'])):
+                    # Get a linestyle
+                    linestyle = linestyles[(i % len(linestyles))]
+                    # Get a color
+                    greyscale = int(255 * i/len(use_case_data['baseline_acc']))
+                    color = f'#{greyscale:02x}{greyscale:02x}{greyscale:02x}'
+                    plt.axhline(acc, label=name, color=color, linestyle=linestyle)
+            plt.title('Mean ensemble accuracy')
+            plt.xticks(np.arange(ensemble_accs_mean[0][0], ensemble_accs_mean[-1][0] + 1, every_))
+            plt.xlim(2, num_ensemble_members)
+            ax.tick_params(color='#DDDDDD', which='both')
+            plt.legend(loc='lower right')
+            if plot_majority_vote:
+                filename = 'ensemble_accs_majority_vote.pdf'
+            else:
+                filename = 'ensemble_accs.pdf'
+            plt.tight_layout()
+            plt.savefig(os.path.join(f, filename))
+            plt.close()
+
         fig, ax = plt.subplots(1, 1, figsize=figsize)
         plt.setp(ax.spines.values(), color='#DDDDDD')
         ax.grid(which='major', color='#DDDDDD', linewidth=0.8, zorder=0)
         ax.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.5)
         ax.minorticks_on()
 
-        min_mean = best_single_model_accuracy
-        color_counter = 0
+        loss_max = best_single_model_loss
         for category in categories:
-            ensemble_accs_mean, ensemble_accs_std, _, _, _, _ = results[category]
-            ensemble_accs_mean = np.array(ensemble_accs_mean)
-            ensemble_accs_std = np.array(ensemble_accs_std)
+            _, _, ensemble_losses_mean, ensemble_losses_std, _, _ = results[category]
+            if loss_max is None or loss_max < np.max(np.array(ensemble_losses_mean)[:, 1]):
+                loss_max = np.max(np.array(ensemble_losses_mean)[:, 1])
 
-            if min_mean is None or min_mean > np.min(ensemble_accs_mean[:, 2]):
-                min_mean = np.min(ensemble_accs_mean[:, 2])
-
-            # Get a color
-            color = colors[color_counter]
-            color_counter = (color_counter + 1) % len(colors)
-            if plot_majority_vote:
-                plt.plot(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 2], label=f'{display_categories[category]}',color=color)
-                plt.plot(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 1], color=color, linestyle='--')
-                # Std as area around the mean
-                plt.fill_between(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 1] - ensemble_accs_std[:, 1],
-                                 ensemble_accs_mean[:, 1] + ensemble_accs_std[:, 1], alpha=0.3, color=color, zorder=3)
-                plt.fill_between(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 2] - ensemble_accs_std[:, 2],
-                                 ensemble_accs_mean[:, 2] + ensemble_accs_std[:, 2], alpha=0.3, color=color, zorder=3)
-            else:
-                plt.plot(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 2],
-                         label=f'{display_categories[category]}', color=color)
-                # Std as area around the mean
-                plt.fill_between(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 2] - ensemble_accs_std[:, 2],
-                                 ensemble_accs_mean[:, 2] + ensemble_accs_std[:, 2], alpha=0.3, color=color, zorder=3)
-        plt.xlabel('Ensemble size')
-        plt.ylabel('Accuracy')
-        ylim = (max(min_mean - 0.005, use_case_data['ylim'][0]), use_case_data['ylim'][1])
-        plt.ylim(ylim)
-        # Horizontal line for the accuracy of the best model
-        if best_single_model_accuracy is not None:
-            plt.axhline(best_single_model_accuracy, color='orange', linestyle='--', label='Best individual model')
-        if use_case_data['baseline_acc'] is not None:
-            # Horizontal line for baseline accuracy
-            for i, (acc, name) in enumerate(zip(use_case_data['baseline_acc'], use_case_data['baseline_name'])):
-                # Get a linestyle
-                linestyle = linestyles[(i % len(linestyles))]
+            plt.plot(*zip(*ensemble_losses_mean), label=f'{display_categories[category]}')
+            # Std as area around the mean
+            plt.fill_between(np.array(ensemble_losses_mean)[:, 0],
+                             np.array(ensemble_losses_mean)[:, 1] - np.array(ensemble_losses_std)[:, 1],
+                             np.array(ensemble_losses_mean)[:, 1] + np.array(ensemble_losses_std)[:, 1], alpha=0.3, zorder=3)
+        # Horizontal line for the loss of the best model
+        if best_single_model_loss is not None:
+            plt.axhline(best_single_model_loss, color='orange', linestyle='--', label='Best SGD')
+        if use_case_data['baseline_loss'] is not None:
+            # Horizontal line for baseline loss
+            for i, (loss, name) in enumerate(zip(use_case_data['baseline_loss'], use_case_data['baseline_name'])):
                 # Get a color
-                greyscale = int(255 * i/len(use_case_data['baseline_acc']))
+                greyscale = int(255 * i / len(use_case_data['baseline_acc']))
                 color = f'#{greyscale:02x}{greyscale:02x}{greyscale:02x}'
-                plt.axhline(acc, label=name, color=color, linestyle=linestyle)
-        plt.title('Mean ensemble accuracy')
-        plt.xticks(np.arange(ensemble_accs_mean[0][0], ensemble_accs_mean[-1][0] + 1, every_))
+                plt.axhline(loss, linestyle='--', label=name, color=color)
+        plt.xlabel('Ensemble size')
+        plt.ylabel('Categorical cross-entropy')
+        if np.isfinite(loss_max):
+            ylim_loss = (use_case_data['ylim_loss'][0], min(loss_max + 0.05, use_case_data['ylim_loss'][1]))
+        else:
+            ylim_loss = (use_case_data['ylim_loss'][0], use_case_data['ylim_loss'][1])
+        plt.ylim(ylim_loss)
+        plt.title('Mean ensemble loss')
+        plt.xticks(np.arange(ensemble_losses_mean[0][0], ensemble_losses_mean[-1][0] + 1, every_))
         plt.xlim(2, num_ensemble_members)
         ax.tick_params(color='#DDDDDD', which='both')
-        plt.legend(loc='upper left')
-        if plot_majority_vote:
-            filename = 'ensemble_accs_majority_vote.pdf'
-        else:
-            filename = 'ensemble_accs.pdf'
+        # Legend upper right
+        plt.legend(loc='upper right')
         plt.tight_layout()
-        plt.savefig(os.path.join(folder, filename))
+        plt.savefig(os.path.join(f, 'ensemble_losses.pdf'))
         plt.close()
 
-    fig, ax = plt.subplots(1, 1, figsize=figsize)
-    plt.setp(ax.spines.values(), color='#DDDDDD')
-    ax.grid(which='major', color='#DDDDDD', linewidth=0.8, zorder=0)
-    ax.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.5)
-    ax.minorticks_on()
+        # Plot the results
+        fig, ax = plt.subplots(1, 1, figsize=figsize)
+        plt.setp(ax.spines.values(), color='#DDDDDD')
+        ax.grid(which='major', color='#DDDDDD', linewidth=0.8, zorder=0)
+        ax.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.5)
+        ax.minorticks_on()
 
-    loss_max = best_single_model_loss
-    for category in categories:
-        _, _, ensemble_losses_mean, ensemble_losses_std, _, _ = results[category]
-        if loss_max is None or loss_max < np.max(np.array(ensemble_losses_mean)[:, 1]):
-            loss_max = np.max(np.array(ensemble_losses_mean)[:, 1])
+        for category in categories:
+            _, _, _, _, ensemble_diversity_mean, ensemble_diversity_std = results[category]
 
-        plt.plot(*zip(*ensemble_losses_mean), label=f'{display_categories[category]}')
-        # Std as area around the mean
-        plt.fill_between(np.array(ensemble_losses_mean)[:, 0],
-                         np.array(ensemble_losses_mean)[:, 1] - np.array(ensemble_losses_std)[:, 1],
-                         np.array(ensemble_losses_mean)[:, 1] + np.array(ensemble_losses_std)[:, 1], alpha=0.3, zorder=3)
-    # Horizontal line for the loss of the best model
-    if best_single_model_loss is not None:
-        plt.axhline(best_single_model_loss, color='orange', linestyle='--', label='Best individual model')
-    if use_case_data['baseline_loss'] is not None:
-        # Horizontal line for baseline loss
-        for i, (loss, name) in enumerate(zip(use_case_data['baseline_loss'], use_case_data['baseline_name'])):
-            # Get a color
-            greyscale = int(255 * i / len(use_case_data['baseline_acc']))
-            color = f'#{greyscale:02x}{greyscale:02x}{greyscale:02x}'
-            plt.axhline(loss, linestyle='--', label=name, color=color)
-    plt.xlabel('Ensemble size')
-    plt.ylabel('Categorical cross-entropy')
-    if np.isfinite(loss_max):
-        ylim_loss = (use_case_data['ylim_loss'][0], min(loss_max + 0.05, use_case_data['ylim_loss'][1]))
-    else:
-        ylim_loss = (use_case_data['ylim_loss'][0], use_case_data['ylim_loss'][1])
-    plt.ylim(ylim_loss)
-    plt.title('Mean ensemble loss')
-    plt.xticks(np.arange(ensemble_losses_mean[0][0], ensemble_losses_mean[-1][0] + 1, every_))
-    plt.xlim(2, num_ensemble_members)
-    ax.tick_params(color='#DDDDDD', which='both')
-    # Legend upper right
-    plt.legend(loc='upper right')
-    plt.tight_layout()
-    plt.savefig(os.path.join(folder, 'ensemble_losses.pdf'))
-    plt.close()
+            plt.plot(*zip(*ensemble_diversity_mean), label=f'{display_categories[category]}')
+            # Std as area around the mean
+            plt.fill_between(np.array(ensemble_diversity_mean)[:, 0],
+                             np.array(ensemble_diversity_mean)[:, 1] - np.array(ensemble_diversity_std)[:, 1],
+                             np.array(ensemble_diversity_mean)[:, 1] + np.array(ensemble_diversity_std)[:, 1], alpha=0.3, zorder=3)
 
-    # Plot the results
-    fig, ax = plt.subplots(1, 1, figsize=figsize)
-    plt.setp(ax.spines.values(), color='#DDDDDD')
-    ax.grid(which='major', color='#DDDDDD', linewidth=0.8, zorder=0)
-    ax.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.5)
-    ax.minorticks_on()
-
-    for category in categories:
-        _, _, _, _, ensemble_diversity_mean, ensemble_diversity_std = results[category]
-
-        plt.plot(*zip(*ensemble_diversity_mean), label=f'{display_categories[category]}')
-        # Std as area around the mean
-        plt.fill_between(np.array(ensemble_diversity_mean)[:, 0],
-                         np.array(ensemble_diversity_mean)[:, 1] - np.array(ensemble_diversity_std)[:, 1],
-                         np.array(ensemble_diversity_mean)[:, 1] + np.array(ensemble_diversity_std)[:, 1], alpha=0.3, zorder=3)
-
-    plt.xlabel('Ensemble size')
-    plt.ylabel('Diversity (Fraction of unique wrong classes present in prediction)')
-    plt.ylim((0.001, 1.))
-    plt.yscale('log')
-    plt.title('Mean ensemble diversity')
-    plt.xticks(np.arange(ensemble_diversity_mean[0][0], ensemble_diversity_mean[-1][0] + 1, every_))
-    plt.xlim(2, num_ensemble_members)
-    ax.tick_params(color='#DDDDDD', which='both')
-    # Legend upper right
-    plt.legend(loc='upper right')
-    plt.tight_layout()
-    plt.savefig(os.path.join(folder, 'ensemble_diversities.pdf'))
-    plt.close()
+        plt.xlabel('Ensemble size')
+        plt.ylabel('Diversity (Fraction of unique wrong classes present in prediction)')
+        plt.ylim((0.001, 1.))
+        plt.yscale('log')
+        plt.title('Mean ensemble diversity')
+        plt.xticks(np.arange(ensemble_diversity_mean[0][0], ensemble_diversity_mean[-1][0] + 1, every_))
+        plt.xlim(2, num_ensemble_members)
+        ax.tick_params(color='#DDDDDD', which='both')
+        # Legend upper right
+        plt.legend(loc='upper right')
+        plt.tight_layout()
+        plt.savefig(os.path.join(f, 'ensemble_diversities.pdf'))
+        plt.close()
 
 
 def main():
@@ -542,15 +543,15 @@ def main():
     reps = args.reps
     include_lam = args.include_lam
 
-    #folder = 'results/cifar10/wideresnet2810/original'
-    folder = r"C:\Users\NHaup\OneDrive\Dokumente\Master_Studium\Semester_4\Thesis\Results\imdb\sse"
+    #folder = r"C:\Users\NHaup\Projects\Results\cifar100\resnet110\original"
+    folder = r"C:\Users\NHaup\OneDrive\Dokumente\Master_Studium\Semester_4\Thesis\Results\imdb\bootstr"
     # 80% of total number of models
-    num_ensemble_members = 8
-    checkpoints_per_model = 5
+    num_ensemble_members = 40
+    checkpoints_per_model = 1
     reps = 5
     test_pred_file_name = 'test_predictions.pkl'
     # True to always overwrite results, False: Load results from file if exists
-    overwrite_results = True
+    overwrite_results = False
 
     # folder = 'results/retinopathy/resnet50/10_checkp_every_15_512_fullbatch_smalllr'
     # num_ensemble_members = 10
