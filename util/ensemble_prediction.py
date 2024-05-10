@@ -1,9 +1,6 @@
 import numpy as np
 import tensorflow as tf
-from keras.datasets import imdb, cifar10, cifar100
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import os
-import matplotlib.pyplot as plt
 import pickle
 import argparse
 import sys
@@ -15,21 +12,33 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 from MajorityVoteBounds.NeurIPS2020.optimize import optimize
 
 
-linestyles = ['dotted', 'dashed', 'dashdot', (0, (3, 5, 1, 5, 1, 5)), (0, (3, 1, 1, 1))]
+def get_y_test(use_case):
+    if use_case == 'cifar10':
+        num_classes = 10
+        from keras.datasets import cifar10
+        _, (_, y_test) = cifar10.load_data()
+        y_test = y_test[:, 0]
+    elif use_case == 'cifar100':
+        num_classes = 100
+        from keras.datasets import cifar100
+        _, (_, y_test) = cifar100.load_data()
+        y_test = y_test[:, 0]
+    elif use_case == 'imdb':
+        num_classes = 1
+        max_features = 20000
+        from keras.datasets import imdb
+        _, (_, y_test) = imdb.load_data(num_words=max_features)
+    elif use_case == 'retinopathy':
+        dataset_path = '../Datasets/Diabetic_Retinopathy'
+        num_classes = 1
+        from tensorflow.keras.preprocessing.image import ImageDataGenerator
+        y_test = ImageDataGenerator().flow_from_directory(f'{dataset_path}/test', shuffle=False,
+                                                          class_mode='binary').classes
+    else:
+        raise ValueError('Unknown use case')
 
-display_categories = {
-    'uniform_last_per_model': 'Uniform last',
-    'uniform_all_per_model': 'Uniform all',
-    'tnd_last_per_model': 'TND last',
-    'tnd_all_per_model': 'TND all',
-}
+    return y_test, num_classes
 
-colors = {
-    'uniform_last_per_model': 'darkorange',
-    'uniform_all_per_model': 'peru',
-    'tnd_last_per_model': 'olivedrab',
-    'tnd_all_per_model': 'darkolivegreen',
-}
 
 def get_prediction(y_pred, y_test, indices, weights, num_classes):
     num_models = len(indices)
@@ -81,7 +90,6 @@ def get_prediction(y_pred, y_test, indices, weights, num_classes):
     # Calculate the best model accuracy (only with actual test set if parts of test set are used for bound optimizing)
     best_single_model_accuracy = np.max([np.mean(subset_y_pred_argmax_per_model[:, i] == y_test)
                                          for i in range(num_models)])
-
     return (ensemble_acc_maj_vote,
             ensemble_acc_softmax_average,
             ensemble_loss,
@@ -122,100 +130,20 @@ def load_all_predictions(folder: str, max_ensemble_size: int, test_pred_file_nam
     return y_pred
 
 
-def get_use_case_data(use_case: str, model_type: str = None):
-    ylim_loss = (0., 1.)
-
-    baseline_acc = None
-    baseline_loss = None
-    baseline_name = None
-    if use_case == 'cifar10':
-        ylim = (0.9, 0.975)
-        num_classes = 10
-        _, (_, y_test) = cifar10.load_data()
-        y_test = y_test[:, 0]
-        if model_type == 'ResNet20v1':
-            ylim = (0.85, 0.95)
-            ylim_loss = (0.15, 1.)
-            baseline_acc = [0.9363]
-            baseline_loss = [0.217]
-            baseline_name = ['cSGHMC-ap[27]']
-        elif model_type == 'ResNet110v1':
-            baseline_acc = [0.9554, 0.9637, 0.9531]
-            baseline_name = ['SWAG[10]', 'DE[10]', 'SGD']
-        elif model_type == 'WideResNet28-10':
-            baseline_acc = [0.9666, 0.9699, 0.963]
-            baseline_name = ['SWAG[10]', 'DE[10]', 'SGD']
-    elif use_case == 'cifar100':
-        ylim = (0.75, 0.84)
-        num_classes = 100
-        _, (_, y_test) = cifar100.load_data()
-        y_test = y_test[:, 0]
-        if model_type == 'ResNet110v1':
-            baseline_acc = [0.7808, 0.8241, 0.7734]
-            baseline_name = ['cSGLD[10]', 'DE[10]', 'SGD']
-        elif model_type == 'WideResNet28-10':
-            baseline_acc = [0.8279, 0.8383, 0.8069]
-            baseline_name = ['SWAG[10]', 'DE[10]', 'SGD']
-    elif use_case == 'imdb':
-        baseline_acc = [0.8703]
-        baseline_loss = [0.3044]
-        baseline_name = ['cSGHMC-ap[7]']
-        ylim = (0.83, 0.88)
-        ylim_loss = (0.25, 1.0)
-        num_classes = 1
-        max_features = 20000
-        _, (_, y_test) = imdb.load_data(num_words=max_features)
-
-    elif use_case == 'retinopathy':
-        dataset_path = '../Datasets/Diabetic_Retinopathy'
-        baseline_acc = [0.886, 0.903, 0.909, 0.916]
-        baseline_name = ['MAP', 'DE[3]', 'MC-Dr.', 'MC-Dr.[3]']
-        ylim = (0.86, 0.92)
-        num_classes = 1
-        y_test = ImageDataGenerator().flow_from_directory(f'{dataset_path}/test', shuffle=False,
-                                                          class_mode='binary').classes
-    else:
-        raise ValueError('Unknown use case')
-
-    return {
-        'ylim': ylim,
-        'ylim_loss': ylim_loss,
-        'baseline_acc': baseline_acc,
-        'baseline_loss': baseline_loss,
-        'baseline_name': baseline_name,
-        'num_classes': num_classes,
-        'y_test': y_test
-    }
-
-
-def ensemble_prediction(use_case_data,
+def ensemble_prediction(use_case: str,
                         folder: str,
                         num_ensemble_members: int,
                         checkpoints_per_model:int,
-                        use_case: str,
                         reps: int,
                         include_lam: bool,
                         pac_bayes: bool = True,
                         tta: bool = False,
                         test_set_cv: bool = True,
                         test_pred_file_name='test_predictions.pkl',
-                        start_size=2,
-                        overwrite_results: bool = False):
-
-    if not overwrite_results and os.path.exists(os.path.join(folder, 'ensemble_results.pkl')):
-        with open(os.path.join(folder, 'ensemble_results.pkl'), 'rb') as f:
-            results = pickle.load(f)
-            create_plots(use_case_data,
-                         results['results'],
-                         results['results'].keys(),
-                         folder,
-                         num_ensemble_members,
-                         results['best_single_model_accuracy'],
-                         results['best_single_model_loss'])
-        return results['best_single_model_accuracy'], results['best_single_model_loss'], results['results']
+                        start_size=2):
 
     max_ensemble_size = num_ensemble_members * checkpoints_per_model
-    y_test = use_case_data['y_test']
+    y_test, num_classes = get_y_test(use_case)
 
     # Load the predictions
     y_pred = load_all_predictions(folder, max_ensemble_size, test_pred_file_name)
@@ -320,7 +248,7 @@ def ensemble_prediction(use_case_data,
                      ensemble_loss,
                      ensemble_diversity,
                      single_model_accuracy,
-                     single_model_loss) = get_prediction(y_pred_, y_test_, indices, weights, use_case_data['num_classes'])
+                     single_model_loss) = get_prediction(y_pred_, y_test_, indices, weights, num_classes)
 
                     if single_model_accuracy > best_single_model_accuracy:
                         best_single_model_accuracy = single_model_accuracy
@@ -362,163 +290,6 @@ def ensemble_prediction(use_case_data,
             'results': results,
         }, f)
 
-    create_plots(use_case_data,
-                 results,
-                 categories,
-                 folder,
-                 num_ensemble_members,
-                 best_single_model_accuracy,
-                 best_single_model_loss)
-
-    return best_single_model_accuracy, best_single_model_loss, results
-
-
-def create_plots(use_case_data,
-                 results,
-                 categories,
-                 folder,
-                 num_ensemble_members,
-                 best_single_model_accuracy=None,
-                 best_single_model_loss=None):
-
-    if num_ensemble_members >= 200:
-        every_ = 40
-    elif num_ensemble_members >= 100:
-        every_ = 20
-    elif num_ensemble_members >= 50:
-        every_ = 10
-    elif num_ensemble_members >= 20:
-        every_ = 5
-    elif num_ensemble_members >= 10:
-        every_ = 2
-    else:
-        every_ = 1
-
-    for f, figsize in [(folder, (9, 6)), (os.path.join(folder, 'small'), (6, 4))]:
-        os.makedirs(f, exist_ok=True)
-
-        # Plot the results
-        for plot_majority_vote in [True, False]:
-            fig, ax = plt.subplots(1, 1, figsize=figsize)
-            plt.setp(ax.spines.values(), color='#DDDDDD')
-            ax.grid(which='major', color='#DDDDDD', linewidth=0.8, zorder=0)
-            #ax.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.5)
-            #ax.minorticks_on()
-
-            min_mean = best_single_model_accuracy
-            for category in categories:
-                ensemble_accs_mean, ensemble_accs_std, _, _, _, _ = results[category]
-                ensemble_accs_mean = np.array(ensemble_accs_mean)
-                ensemble_accs_std = np.array(ensemble_accs_std)
-
-                if min_mean is None or min_mean > np.min(ensemble_accs_mean[:, 2]):
-                    min_mean = np.min(ensemble_accs_mean[:, 2])
-
-                # Get a color
-                color = colors[category]
-                if plot_majority_vote:
-                    plt.plot(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 2], label=f'{display_categories[category]}',color=color)
-                    plt.plot(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 1], color=color, linestyle='--')
-                    # Std as area around the mean
-                    plt.fill_between(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 1] - ensemble_accs_std[:, 1],
-                                     ensemble_accs_mean[:, 1] + ensemble_accs_std[:, 1], alpha=0.3, color=color, zorder=3)
-                    plt.fill_between(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 2] - ensemble_accs_std[:, 2],
-                                     ensemble_accs_mean[:, 2] + ensemble_accs_std[:, 2], alpha=0.3, color=color, zorder=3)
-                else:
-                    plt.plot(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 2],
-                             label=f'{display_categories[category]}', color=color)
-                    # Std as area around the mean
-                    plt.fill_between(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 2] - ensemble_accs_std[:, 2],
-                                     ensemble_accs_mean[:, 2] + ensemble_accs_std[:, 2], alpha=0.3, color=color, zorder=3)
-            plt.xlabel('M')
-            plt.ylabel('Accuracy')
-            ylim = (max(min_mean - 0.005, use_case_data['ylim'][0]), use_case_data['ylim'][1])
-            plt.ylim(ylim)
-            # Horizontal line for the accuracy of the best model
-            if best_single_model_accuracy is not None:
-                plt.axhline(best_single_model_accuracy, color='orange', linestyle='--', label='Best SGD')
-            if use_case_data['baseline_acc'] is not None:
-                # Horizontal line for baseline accuracy
-                for i, (acc, name) in enumerate(zip(use_case_data['baseline_acc'], use_case_data['baseline_name'])):
-                    # Get a linestyle
-                    linestyle = linestyles[(i % len(linestyles))]
-                    # Get a color
-                    greyscale = int(255 * i/len(use_case_data['baseline_acc']))
-                    color = f'#{greyscale:02x}{greyscale:02x}{greyscale:02x}'
-                    plt.axhline(acc, label=name, color=color, linestyle=linestyle)
-            #plt.title('Mean ensemble accuracy')
-            ax.set_xticks(np.arange(1, num_ensemble_members + 1, 1))
-            # Labels: Every xth label is shown, starting from the xth label
-            labels = [""] * num_ensemble_members
-            for i in range(1, num_ensemble_members + 1):
-                if i % every_ == 0:
-                    labels[i - 1] = str(i)
-            ax.set_xticklabels(labels)
-            #plt.xticks(np.arange(ensemble_accs_mean[0][0], ensemble_accs_mean[-1][0] + 1, every_))
-            plt.xlim(2, num_ensemble_members)
-            ax.tick_params(color='#DDDDDD', which='both')
-            # Shrink current axis's height by 10% on the bottom and move 20% up
-            box = ax.get_position()
-            ax.set_position([box.x0, box.y0 + box.height * 0.2,
-                             box.width, box.height * 0.9])
-
-            # Put a legend below current axis
-            ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15),
-                      fancybox=True, shadow=True, ncol=4)
-            #plt.legend(loc='lower right')
-            if plot_majority_vote:
-                filename = 'ensemble_accs_majority_vote.pdf'
-            else:
-                filename = 'ensemble_accs.pdf'
-            #plt.tight_layout()
-            plt.savefig(os.path.join(f, filename), bbox_inches="tight")
-            plt.close()
-
-        fig, ax = plt.subplots(1, 1, figsize=figsize)
-        plt.setp(ax.spines.values(), color='#DDDDDD')
-        ax.grid(which='major', color='#DDDDDD', linewidth=0.8, zorder=0)
-        #ax.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.5)
-        #ax.minorticks_on()
-
-        loss_max = best_single_model_loss
-        for category in categories:
-            color = colors[category]
-            _, _, ensemble_losses_mean, ensemble_losses_std, _, _ = results[category]
-            if loss_max is None or loss_max < np.max(np.array(ensemble_losses_mean)[:, 1]):
-                loss_max = np.max(np.array(ensemble_losses_mean)[:, 1])
-
-            plt.plot(*zip(*ensemble_losses_mean), label=f'{display_categories[category]}', color=color)
-            # Std as area around the mean
-            plt.fill_between(np.array(ensemble_losses_mean)[:, 0],
-                             np.array(ensemble_losses_mean)[:, 1] - np.array(ensemble_losses_std)[:, 1],
-                             np.array(ensemble_losses_mean)[:, 1] + np.array(ensemble_losses_std)[:, 1], alpha=0.3, zorder=3, color=color)
-        # Horizontal line for the loss of the best model
-        if best_single_model_loss is not None:
-            plt.axhline(best_single_model_loss, color='orange', linestyle='--', label='Best SGD')
-        if use_case_data['baseline_loss'] is not None:
-            # Horizontal line for baseline loss
-            for i, (loss, name) in enumerate(zip(use_case_data['baseline_loss'], use_case_data['baseline_name'])):
-                # Get a color
-                greyscale = int(255 * i / len(use_case_data['baseline_acc']))
-                color = f'#{greyscale:02x}{greyscale:02x}{greyscale:02x}'
-                plt.axhline(loss, linestyle='--', label=name, color=color)
-        plt.xlabel('M')
-        plt.ylabel('Categorical cross-entropy')
-        if np.isfinite(loss_max):
-            ylim_loss = (use_case_data['ylim_loss'][0], min(loss_max + 0.05, use_case_data['ylim_loss'][1]))
-        else:
-            ylim_loss = (use_case_data['ylim_loss'][0], use_case_data['ylim_loss'][1])
-        plt.ylim(ylim_loss)
-        plt.title('Mean ensemble loss')
-        plt.xticks(np.arange(ensemble_losses_mean[0][0], ensemble_losses_mean[-1][0] + 1, every_))
-        plt.xlim(2, num_ensemble_members)
-        ax.tick_params(color='#DDDDDD', which='both')
-        # Legend upper right
-        plt.legend(loc='upper right')
-        plt.tight_layout()
-        plt.savefig(os.path.join(f, 'ensemble_losses.pdf'))
-        plt.close()
-
 
 def main():
     # Configuration
@@ -533,7 +304,6 @@ def main():
     parser.add_argument('--test_pred_file_name', type=str,
                         help='Name of the test prediction file', default='test_predictions.pkl')
     parser.add_argument('--include_lam', action='store_true', help='Include lambda in the ensemble')
-    parser.add_argument('-o', '--overwrite_results', action='store_true', help='Overwrite results')
 
     args = parser.parse_args()
     path = args.path
@@ -542,24 +312,6 @@ def main():
     reps = args.reps
     test_pred_file_name = args.test_pred_file_name
     include_lam = args.include_lam
-    overwrite_results = args.overwrite_results
-
-    #path = r"C:\Users\NHaup\Projects\Results\cifar100\resnet110\epoch_budget"
-    #path = r"C:\Users\NHaup\OneDrive\Dokumente\Master_Studium\Semester_4\Thesis\Results\cifar10\resnet20\epoch_budget"
-    # 80% of total number of models
-    #num_ensemble_members = 15
-    #checkpoints_per_model = 1
-    #reps = 5
-    #test_pred_file_name = 'test_predictions.pkl'
-    # True to always overwrite results, False: Load results from file if exists
-    #overwrite_results = False
-
-    # path = 'results/retinopathy/resnet50/10_checkp_every_15_512_fullbatch_smalllr'
-    # num_ensemble_members = 10
-    # checkpoints_per_model = 6
-    # reps = 3
-    # test_pred_file_name = 'test_predictions.pkl'
-    #test_pred_file_name = 'ub_y_pred.pkl'
 
     # Find any config.json in path recursively
     for root, dirs, files in os.walk(path):
@@ -574,16 +326,9 @@ def main():
                             raise ValueError('No use case found in config')
                     else:
                         use_case = config['use_case']
-                    try:
-                        model_type = config['model_type']
-                    except KeyError:
-                        model_type = config['model']
                     break
 
-    use_case_data = get_use_case_data(use_case, model_type)
-
     if 'epoch_budget' in path:
-        results_dict = {}
         for i in range(2, num_ensemble_members+1):
             print(f'Ensemble size: {i}')
             path_ = os.path.join(path, f'{i:02d}')
@@ -593,39 +338,22 @@ def main():
                 for file in files:
                     if file.endswith('scores.json'):
                         models += 1
-            _, _, res = ensemble_prediction(use_case_data=use_case_data,
-                                      folder=path_,
-                                      num_ensemble_members=models,
-                                      checkpoints_per_model=checkpoints_per_model,
-                                      use_case=use_case,
-                                      reps=reps,
-                                      include_lam=include_lam,
-                                      test_pred_file_name=test_pred_file_name,
-                                      start_size=models,
-                                      overwrite_results=overwrite_results)
-            for category in res.keys():
-                if category not in results_dict:
-                    results_dict[category] = ([], [], [], [], [], [])
-
-                # Take last value of each metric (only biggest ensemble computed per epoch budget step)
-                (mean, std, l_mean, l_std, div_mean, div_std) = res[category]
-                results_dict[category][0].append((i, mean[-1][1], mean[-1][2]))
-                results_dict[category][1].append((i, std[-1][1], std[-1][2]))
-                results_dict[category][2].append((i, l_mean[-1][1]))
-                results_dict[category][3].append((i, l_std[-1][1]))
-                results_dict[category][4].append((i, div_mean[-1][1]))
-                results_dict[category][5].append((i, div_std[-1][1]))
-        create_plots(use_case_data, results_dict, results_dict.keys(), path, num_ensemble_members)
+            ensemble_prediction(folder=path_,
+                                num_ensemble_members=models,
+                                checkpoints_per_model=checkpoints_per_model,
+                                use_case=use_case,
+                                reps=reps,
+                                include_lam=include_lam,
+                                test_pred_file_name=test_pred_file_name,
+                                start_size=models)
     else:
-        ensemble_prediction(use_case_data=use_case_data,
-                            folder=path,
+        ensemble_prediction(folder=path,
                             num_ensemble_members=num_ensemble_members,
                             checkpoints_per_model=checkpoints_per_model,
                             use_case=use_case,
                             reps=reps,
                             include_lam=include_lam,
-                            test_pred_file_name=test_pred_file_name,
-                            overwrite_results=overwrite_results)
+                            test_pred_file_name=test_pred_file_name)
 
 
 if __name__ == '__main__':
