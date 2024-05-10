@@ -2,6 +2,13 @@ import numpy as np
 
 
 def split_dataset(train_samples, validation_split=0.0, random=True, bootstrap=False):
+    """
+    Split the dataset into training and validation sets.
+    :param train_samples: Number of training samples
+    :param validation_split: Fraction of training samples to use for validation
+    :param random: Whether to randomly shuffle the samples
+    :param bootstrap: Whether to sample with replacement
+    """
 
     if random:
         indices = np.random.choice(train_samples, train_samples, replace=bootstrap)
@@ -22,6 +29,7 @@ def split_dataset(train_samples, validation_split=0.0, random=True, bootstrap=Fa
 
 
 if __name__ == '__main__':
+    # Test the function
     train_samples = 100
     validation_split = 0.2
     split_dataset(train_samples, validation_split, bootstrap=False)

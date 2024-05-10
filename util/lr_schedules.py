@@ -26,9 +26,14 @@ def cifar_schedule(epoch, initial_lr, epochs):
     return lr
 
 
-# Default values for ResNets from the paper
 def sse_lr_schedule(epoch, B=200, M=5, initial_lr=0.2):
-    """Learning Rate Schedule for ResNet models with SSE
+    """
+    Learning Rate Schedule for ResNet models with SSE. Default values for ResNets from the Huang et al. paper.
+    :param epoch: Current epoch
+    :param B: Total number of epochs
+    :param M: Number of cycles
+    :param initial_lr: Initial learning rate
+    :return: Learning rate
     """
     ceil = np.ceil(B / M)
     lr = (initial_lr / 2) * (np.cos(np.pi * ((epoch) % ceil) / ceil) + 1)
@@ -36,9 +41,9 @@ def sse_lr_schedule(epoch, B=200, M=5, initial_lr=0.2):
     return lr
 
 
-# From https://github.com/google/uncertainty-baselines/blob/main/uncertainty_baselines/schedules.py
 def step_decay_schedule(epoch, initial_lr, decay_ratio, decay_epochs, warmup_epochs):
-    """Learning rate schedule.
+    """Learning rate schedule. Taken from
+    https://github.com/google/uncertainty-baselines/blob/main/uncertainty_baselines/schedules.py
 
     It starts with a linear warmup to the initial learning rate over
     `warmup_epochs`. This is found to be helpful for large batch size training
@@ -59,6 +64,12 @@ def step_decay_schedule(epoch, initial_lr, decay_ratio, decay_epochs, warmup_epo
 
 
 def garipov_schedule(epoch, initial_lr, epochs):
+    """Learning Rate Schedule as described in Ashukha et al. (2020)
+    :param epoch: Current epoch
+    :param initial_lr: Initial learning rate
+    :param epochs: Total number of epochs
+    :return: Learning rate
+    """
     lr = initial_lr
     if epoch > int(0.9 * epochs):
         lr = initial_lr * 0.01
@@ -67,7 +78,10 @@ def garipov_schedule(epoch, initial_lr, epochs):
     return lr
 
 
-if __name__ == '__main__':
+def plot_lr_schedules():
+    """
+    Plot the learning rate schedules.
+    """
     import matplotlib.pyplot as plt
 
     epochs = 300
@@ -95,3 +109,7 @@ if __name__ == '__main__':
     plt.tight_layout()
     plt.savefig('lr_schedules.pdf')
     plt.show()
+
+
+if __name__ == '__main__':
+    plot_lr_schedules()

@@ -14,8 +14,6 @@ from tqdm import tqdm
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from MajorityVoteBounds.NeurIPS2020.optimize import optimize
 
-colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink',
-          'tab:gray', 'tab:olive', 'tab:cyan']
 
 linestyles = ['dotted', 'dashed', 'dashdot', (0, (3, 5, 1, 5, 1, 5)), (0, (3, 1, 1, 1))]
 
@@ -26,6 +24,12 @@ display_categories = {
     'tnd_all_per_model': 'TND all',
 }
 
+colors = {
+    'uniform_last_per_model': 'darkorange',
+    'uniform_all_per_model': 'peru',
+    'tnd_last_per_model': 'olivedrab',
+    'tnd_all_per_model': 'darkolivegreen',
+}
 
 def get_prediction(y_pred, y_test, indices, weights, num_classes):
     num_models = len(indices)
@@ -376,14 +380,21 @@ def create_plots(use_case_data,
                  num_ensemble_members,
                  best_single_model_accuracy=None,
                  best_single_model_loss=None):
-    if num_ensemble_members > 50:
+
+    if num_ensemble_members >= 200:
+        every_ = 40
+    elif num_ensemble_members >= 100:
+        every_ = 20
+    elif num_ensemble_members >= 50:
+        every_ = 10
+    elif num_ensemble_members >= 20:
         every_ = 5
-    elif num_ensemble_members > 30:
+    elif num_ensemble_members >= 10:
         every_ = 2
     else:
         every_ = 1
 
-    for f, figsize in [(folder, (9, 6)), (os.path.join(folder, 'small'), (5, 3))]:
+    for f, figsize in [(folder, (9, 6)), (os.path.join(folder, 'small'), (6, 4))]:
         os.makedirs(f, exist_ok=True)
 
         # Plot the results
@@ -391,11 +402,10 @@ def create_plots(use_case_data,
             fig, ax = plt.subplots(1, 1, figsize=figsize)
             plt.setp(ax.spines.values(), color='#DDDDDD')
             ax.grid(which='major', color='#DDDDDD', linewidth=0.8, zorder=0)
-            ax.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.5)
-            ax.minorticks_on()
+            #ax.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.5)
+            #ax.minorticks_on()
 
             min_mean = best_single_model_accuracy
-            color_counter = 0
             for category in categories:
                 ensemble_accs_mean, ensemble_accs_std, _, _, _, _ = results[category]
                 ensemble_accs_mean = np.array(ensemble_accs_mean)
@@ -405,8 +415,7 @@ def create_plots(use_case_data,
                     min_mean = np.min(ensemble_accs_mean[:, 2])
 
                 # Get a color
-                color = colors[color_counter]
-                color_counter = (color_counter + 1) % len(colors)
+                color = colors[category]
                 if plot_majority_vote:
                     plt.plot(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 2], label=f'{display_categories[category]}',color=color)
                     plt.plot(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 1], color=color, linestyle='--')
@@ -421,7 +430,7 @@ def create_plots(use_case_data,
                     # Std as area around the mean
                     plt.fill_between(ensemble_accs_mean[:, 0], ensemble_accs_mean[:, 2] - ensemble_accs_std[:, 2],
                                      ensemble_accs_mean[:, 2] + ensemble_accs_std[:, 2], alpha=0.3, color=color, zorder=3)
-            plt.xlabel('Ensemble size')
+            plt.xlabel('M')
             plt.ylabel('Accuracy')
             ylim = (max(min_mean - 0.005, use_case_data['ylim'][0]), use_case_data['ylim'][1])
             plt.ylim(ylim)
@@ -437,36 +446,52 @@ def create_plots(use_case_data,
                     greyscale = int(255 * i/len(use_case_data['baseline_acc']))
                     color = f'#{greyscale:02x}{greyscale:02x}{greyscale:02x}'
                     plt.axhline(acc, label=name, color=color, linestyle=linestyle)
-            plt.title('Mean ensemble accuracy')
-            plt.xticks(np.arange(ensemble_accs_mean[0][0], ensemble_accs_mean[-1][0] + 1, every_))
+            #plt.title('Mean ensemble accuracy')
+            ax.set_xticks(np.arange(1, num_ensemble_members + 1, 1))
+            # Labels: Every xth label is shown, starting from the xth label
+            labels = [""] * num_ensemble_members
+            for i in range(1, num_ensemble_members + 1):
+                if i % every_ == 0:
+                    labels[i - 1] = str(i)
+            ax.set_xticklabels(labels)
+            #plt.xticks(np.arange(ensemble_accs_mean[0][0], ensemble_accs_mean[-1][0] + 1, every_))
             plt.xlim(2, num_ensemble_members)
             ax.tick_params(color='#DDDDDD', which='both')
-            plt.legend(loc='lower right')
+            # Shrink current axis's height by 10% on the bottom and move 20% up
+            box = ax.get_position()
+            ax.set_position([box.x0, box.y0 + box.height * 0.2,
+                             box.width, box.height * 0.9])
+
+            # Put a legend below current axis
+            ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15),
+                      fancybox=True, shadow=True, ncol=4)
+            #plt.legend(loc='lower right')
             if plot_majority_vote:
                 filename = 'ensemble_accs_majority_vote.pdf'
             else:
                 filename = 'ensemble_accs.pdf'
-            plt.tight_layout()
-            plt.savefig(os.path.join(f, filename))
+            #plt.tight_layout()
+            plt.savefig(os.path.join(f, filename), bbox_inches="tight")
             plt.close()
 
         fig, ax = plt.subplots(1, 1, figsize=figsize)
         plt.setp(ax.spines.values(), color='#DDDDDD')
         ax.grid(which='major', color='#DDDDDD', linewidth=0.8, zorder=0)
-        ax.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.5)
-        ax.minorticks_on()
+        #ax.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.5)
+        #ax.minorticks_on()
 
         loss_max = best_single_model_loss
         for category in categories:
+            color = colors[category]
             _, _, ensemble_losses_mean, ensemble_losses_std, _, _ = results[category]
             if loss_max is None or loss_max < np.max(np.array(ensemble_losses_mean)[:, 1]):
                 loss_max = np.max(np.array(ensemble_losses_mean)[:, 1])
 
-            plt.plot(*zip(*ensemble_losses_mean), label=f'{display_categories[category]}')
+            plt.plot(*zip(*ensemble_losses_mean), label=f'{display_categories[category]}', color=color)
             # Std as area around the mean
             plt.fill_between(np.array(ensemble_losses_mean)[:, 0],
                              np.array(ensemble_losses_mean)[:, 1] - np.array(ensemble_losses_std)[:, 1],
-                             np.array(ensemble_losses_mean)[:, 1] + np.array(ensemble_losses_std)[:, 1], alpha=0.3, zorder=3)
+                             np.array(ensemble_losses_mean)[:, 1] + np.array(ensemble_losses_std)[:, 1], alpha=0.3, zorder=3, color=color)
         # Horizontal line for the loss of the best model
         if best_single_model_loss is not None:
             plt.axhline(best_single_model_loss, color='orange', linestyle='--', label='Best SGD')
@@ -477,7 +502,7 @@ def create_plots(use_case_data,
                 greyscale = int(255 * i / len(use_case_data['baseline_acc']))
                 color = f'#{greyscale:02x}{greyscale:02x}{greyscale:02x}'
                 plt.axhline(loss, linestyle='--', label=name, color=color)
-        plt.xlabel('Ensemble size')
+        plt.xlabel('M')
         plt.ylabel('Categorical cross-entropy')
         if np.isfinite(loss_max):
             ylim_loss = (use_case_data['ylim_loss'][0], min(loss_max + 0.05, use_case_data['ylim_loss'][1]))
@@ -494,80 +519,56 @@ def create_plots(use_case_data,
         plt.savefig(os.path.join(f, 'ensemble_losses.pdf'))
         plt.close()
 
-        # Plot the results
-        fig, ax = plt.subplots(1, 1, figsize=figsize)
-        plt.setp(ax.spines.values(), color='#DDDDDD')
-        ax.grid(which='major', color='#DDDDDD', linewidth=0.8, zorder=0)
-        ax.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.5)
-        ax.minorticks_on()
-
-        for category in categories:
-            _, _, _, _, ensemble_diversity_mean, ensemble_diversity_std = results[category]
-
-            plt.plot(*zip(*ensemble_diversity_mean), label=f'{display_categories[category]}')
-            # Std as area around the mean
-            plt.fill_between(np.array(ensemble_diversity_mean)[:, 0],
-                             np.array(ensemble_diversity_mean)[:, 1] - np.array(ensemble_diversity_std)[:, 1],
-                             np.array(ensemble_diversity_mean)[:, 1] + np.array(ensemble_diversity_std)[:, 1], alpha=0.3, zorder=3)
-
-        plt.xlabel('Ensemble size')
-        plt.ylabel('Diversity (Fraction of unique wrong classes present in prediction)')
-        plt.ylim((0.001, 1.))
-        plt.yscale('log')
-        plt.title('Mean ensemble diversity')
-        plt.xticks(np.arange(ensemble_diversity_mean[0][0], ensemble_diversity_mean[-1][0] + 1, every_))
-        plt.xlim(2, num_ensemble_members)
-        ax.tick_params(color='#DDDDDD', which='both')
-        # Legend upper right
-        plt.legend(loc='upper right')
-        plt.tight_layout()
-        plt.savefig(os.path.join(f, 'ensemble_diversities.pdf'))
-        plt.close()
-
 
 def main():
     # Configuration
     parser = argparse.ArgumentParser(description='Ensemble prediction')
-    parser.add_argument('--folder', type=str, default='results/10_checkp_every_40_wenzel_0_2_val',
-                        help='Folder with the models')
-    parser.add_argument('--num_ensemble_members', type=int, default=50,
+    parser.add_argument('--path', type=str, default='results/cifar10/resnet20/original',
+                        help='Folder with the models for one experiment')
+    parser.add_argument('-n', '--num_ensemble_members', type=int, default=50,
                         help='Number of ensemble members')
-    parser.add_argument('--checkpoints_per_model', type=int, default=1, help='Number of checkpoints per independent model')
-    parser.add_argument('--reps', type=int, help='Number of repetitions', required=False, default=5)
+    parser.add_argument('-cp', '--checkpoints_per_model', type=int, default=1,
+                        help='Number of checkpoints per independent model')
+    parser.add_argument('--reps', type=int, help='Number of repetitions', default=5)
+    parser.add_argument('--test_pred_file_name', type=str,
+                        help='Name of the test prediction file', default='test_predictions.pkl')
     parser.add_argument('--include_lam', action='store_true', help='Include lambda in the ensemble')
+    parser.add_argument('-o', '--overwrite_results', action='store_true', help='Overwrite results')
 
     args = parser.parse_args()
-    folder = args.folder
+    path = args.path
     num_ensemble_members = args.num_ensemble_members
     checkpoints_per_model = args.checkpoints_per_model
     reps = args.reps
+    test_pred_file_name = args.test_pred_file_name
     include_lam = args.include_lam
+    overwrite_results = args.overwrite_results
 
-    #folder = r"C:\Users\NHaup\Projects\Results\cifar100\resnet110\original"
-    folder = r"C:\Users\NHaup\OneDrive\Dokumente\Master_Studium\Semester_4\Thesis\Results\imdb\bootstr"
+    #path = r"C:\Users\NHaup\Projects\Results\cifar100\resnet110\epoch_budget"
+    #path = r"C:\Users\NHaup\OneDrive\Dokumente\Master_Studium\Semester_4\Thesis\Results\cifar10\resnet20\epoch_budget"
     # 80% of total number of models
-    num_ensemble_members = 40
-    checkpoints_per_model = 1
-    reps = 5
-    test_pred_file_name = 'test_predictions.pkl'
+    #num_ensemble_members = 15
+    #checkpoints_per_model = 1
+    #reps = 5
+    #test_pred_file_name = 'test_predictions.pkl'
     # True to always overwrite results, False: Load results from file if exists
-    overwrite_results = False
+    #overwrite_results = False
 
-    # folder = 'results/retinopathy/resnet50/10_checkp_every_15_512_fullbatch_smalllr'
+    # path = 'results/retinopathy/resnet50/10_checkp_every_15_512_fullbatch_smalllr'
     # num_ensemble_members = 10
     # checkpoints_per_model = 6
     # reps = 3
     # test_pred_file_name = 'test_predictions.pkl'
     #test_pred_file_name = 'ub_y_pred.pkl'
 
-    # Find any config.json in folder recursively
-    for root, dirs, files in os.walk(folder):
+    # Find any config.json in path recursively
+    for root, dirs, files in os.walk(path):
         for file in files:
             if file.endswith('config.json'):
                 with open(os.path.join(root, file), 'r') as f:
                     config = json.load(f)
                     if 'use_case' not in config:
-                        if 'imdb' in folder:
+                        if 'imdb' in path:
                             use_case = 'imdb'
                         else:
                             raise ValueError('No use case found in config')
@@ -581,19 +582,19 @@ def main():
 
     use_case_data = get_use_case_data(use_case, model_type)
 
-    if 'epoch_budget' in folder:
+    if 'epoch_budget' in path:
         results_dict = {}
         for i in range(2, num_ensemble_members+1):
             print(f'Ensemble size: {i}')
-            folder_ = os.path.join(folder, f'{i:02d}')
+            path_ = os.path.join(path, f'{i:02d}')
             models = 0
             # Get number of models (in case not all are present)
-            for root, dirs, files in os.walk(folder_):
+            for root, dirs, files in os.walk(path_):
                 for file in files:
                     if file.endswith('scores.json'):
                         models += 1
             _, _, res = ensemble_prediction(use_case_data=use_case_data,
-                                      folder=folder_,
+                                      folder=path_,
                                       num_ensemble_members=models,
                                       checkpoints_per_model=checkpoints_per_model,
                                       use_case=use_case,
@@ -614,10 +615,10 @@ def main():
                 results_dict[category][3].append((i, l_std[-1][1]))
                 results_dict[category][4].append((i, div_mean[-1][1]))
                 results_dict[category][5].append((i, div_std[-1][1]))
-        create_plots(use_case_data, results_dict, results_dict.keys(), folder, num_ensemble_members)
+        create_plots(use_case_data, results_dict, results_dict.keys(), path, num_ensemble_members)
     else:
         ensemble_prediction(use_case_data=use_case_data,
-                            folder=folder,
+                            folder=path,
                             num_ensemble_members=num_ensemble_members,
                             checkpoints_per_model=checkpoints_per_model,
                             use_case=use_case,

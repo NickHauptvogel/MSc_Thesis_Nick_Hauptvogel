@@ -112,6 +112,7 @@ if gpu_devices:
   configuration['GPU'] = details.get('device_name', 'Unknown GPU')
 print(configuration)
 
+# Load data
 print('Loading data...')
 (x_train, y_train), (x_test, y_test) = imdb.load_data(num_words=max_features)
 
@@ -150,6 +151,7 @@ if map_optimizer:
     reg_weight = 1.0 / x_train.shape[0]
     print('Using MAP optimizer with reg_weight: ', str(reg_weight))
     pfac = priorfactory.GaussianPriorFactory(prior_stddev=1.0, weight=reg_weight)
+    # Define the model
     model = Sequential()
     model.add(pfac(Embedding(max_features, embedding_size, input_length=maxlen)))
     model.add(Dropout(0.25))
@@ -165,6 +167,7 @@ if map_optimizer:
 
 else:
     print('Using MLE optimizer')
+    # Define the model
     model = Sequential()
     model.add(Embedding(max_features, embedding_size, input_length=maxlen))
     model.add(Dropout(0.25))
@@ -183,7 +186,7 @@ optimizer_ = SGD(learning_rate=initial_lr, momentum=momentum, nesterov=nesterov)
 model.compile(loss='binary_crossentropy',
               optimizer=optimizer_,
               metrics=['accuracy'])
-#model.summary()
+
 print(model_type)
 
 # Prepare callbacks
@@ -228,8 +231,8 @@ if not checkpointing:
 # Get all model checkpoint files
 checkpoint_files = sorted([f for f in os.listdir(save_dir) if f.startswith(model_name) and f.endswith('.h5')])
 if checkpoint_every > 0:
-    # Clean up the checkpoint files to include every x epochs
-    for  i, file in enumerate(checkpoint_files):
+    # Clean up the checkpoint files to include only every x epochs
+    for i, file in enumerate(checkpoint_files):
         if (i+1) % checkpoint_every != 0:
             os.remove(os.path.join(save_dir, file))
 
@@ -258,6 +261,7 @@ for file in checkpoint_files:
         pickle.dump(y_pred, f)
 
     if validation_split > 0 or bootstrapping:
+        # Score trained model on validation set
         val_score, val_acc = model.evaluate(x_val, y_val, verbose=0)
         print('Val score:', val_score)
         print('Val accuracy:', val_acc)

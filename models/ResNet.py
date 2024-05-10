@@ -4,6 +4,9 @@ from keras.layers import AveragePooling2D, Input, Flatten
 from keras.regularizers import l2
 from keras.models import Model
 
+# Taken from Keras example
+# https://github.com/keras-team/keras/blob/1a3ee8441933fc007be6b2beb47af67998d50737/examples/cifar10_resnet.py
+
 def resnet_layer(inputs,
                  l2_reg,
                  num_filters=16,

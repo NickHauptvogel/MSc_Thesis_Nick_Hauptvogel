@@ -1,3 +1,5 @@
+import argparse
+
 import keras
 from keras.datasets import cifar10, cifar100
 import numpy as np
@@ -8,11 +10,15 @@ import os
 from absl import logging
 import tensorflow as tf
 import tensorflow_datasets as tfds
-from tqdm import tqdm
 
 
 def load_cifar(num_classes, subtract_pixel_mean, debug):
-    # Load the CIFAR10 data.
+    """
+    Load CIFAR-10 or CIFAR-100 dataset.
+    :param num_classes: Number of classes in dataset
+    :param subtract_pixel_mean: Subtract pixel mean from images
+    :param debug: Use a small subset of the dataset
+    """
     if num_classes == 10:
         dataloader = cifar10
     elif num_classes == 100:
@@ -44,6 +50,9 @@ def load_cifar(num_classes, subtract_pixel_mean, debug):
     return (x_train, y_train), (x_test, y_test)
 
 
+# The following code is taken and adapted from
+# https://github.com/google/uncertainty-baselines/blob/main/uncertainty_baselines/datasets/diabetic_retinopathy_dataset_utils.py
+#
 # coding=utf-8
 # Copyright 2024 The Uncertainty Baselines Authors.
 #
@@ -59,8 +68,6 @@ def load_cifar(num_classes, subtract_pixel_mean, debug):
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""https://www.kaggle.com/c/diabetic-retinopathy-detection/data."""
-
 _CITATION = """\
 @ONLINE {kaggle-diabetic-retinopathy,
     author = "Kaggle and EyePacs",
@@ -73,11 +80,6 @@ _CITATION = """\
 _URL_TEST_LABELS = (
     "https://storage.googleapis.com/kaggle-forum-message-attachments/"
     "90528/2877/retinopathy_solution.csv")
-_BTGRAHAM_DESCRIPTION_PATTERN = (
-    "Images have been preprocessed as the winner of the Kaggle competition did "
-    "in 2015: first they are resized so that the radius of an eyeball is "
-    "{} pixels, then they are cropped to 90% of the radius, and finally they "
-    "are encoded with 72 JPEG quality.")
 _BLUR_BTGRAHAM_DESCRIPTION_PATTERN = (
     "A variant of the processing method used by the winner of the 2015 Kaggle "
     "competition: images are resized so that the radius of an eyeball is "
@@ -371,47 +373,26 @@ def _mask_and_crop_to_radius(image,
     return image
 
 
-def preprocess_retinopathy(start, stop, output_folder, folder, csv_name):
+def preprocess_retinopathy(output_folder, folder, csv_name, dataset_path):
 
     dataset = UBDiabeticRetinopathyDetection()
-    data_path = r"C:\Users\NHaup\Projects\Datasets\Diabetic_Retinopathy"
-    os.makedirs(f"{data_path}/{output_folder}", exist_ok=True)
-    for i, example in enumerate(dataset.generate_examples(f"{data_path}/{folder}", f"{data_path}/{csv_name}", start=start, stop=stop)):
-        print(example[0], "({}/{})".format(i, str(stop - start)))
-        # Skip if example already exists
-        if os.path.exists(f"{data_path}/{output_folder}/{example[0]}.jpeg"):
-            print(f"Skipping {example[0]}")
-            continue
+    os.makedirs(f"{dataset_path}/{output_folder}", exist_ok=True)
+    for i, example in enumerate(dataset.generate_examples(f"{dataset_path}/{folder}", f"{dataset_path}/{csv_name}")):
+        print(example[0], "({})".format(i))
         # Store the image in a file
-        with open(f"{data_path}/{output_folder}/{example[0]}.jpeg", "wb") as f:
+        with open(f"{dataset_path}/{output_folder}/{example[0]}.jpeg", "wb") as f:
             f.write(example[1]['image'].read())
-
-def sort_retinopathy_validation():
-    data_path = r"C:\Users\NHaup\Projects\Datasets\Diabetic_Retinopathy"
-    csv_name = "retinopathy_solution.csv"
-    with open(f"{data_path}/{csv_name}", "r") as f:
-        reader = csv.reader(f)
-        data = list(reader)[1:]
-    os.makedirs(f"{data_path}/validation", exist_ok=True)
-    for row in tqdm(data):
-        subfolder = "1" if int(row[1]) > 1 else "0"
-        if row[2] == "Public":
-            os.makedirs(f"{data_path}/validation/{subfolder}", exist_ok=True)
-            os.rename(f"{data_path}/validation/{row[0]}.jpeg", f"{data_path}/validation/{subfolder}/{row[0]}.jpeg")
-        else:
-            os.makedirs(f"{data_path}/test/{subfolder}", exist_ok=True)
-            os.rename(f"{data_path}/test/{row[0]}.jpeg", f"{data_path}/test/{subfolder}/{row[0]}.jpeg")
-
-    csv_name = "trainLabels.csv"
-    with open(f"{data_path}/{csv_name}", "r") as f:
-        reader = csv.reader(f)
-        data = list(reader)[1:]
-    for row in tqdm(data):
-        subfolder = "1" if int(row[1]) > 1 else "0"
-        os.makedirs(f"{data_path}/train/{subfolder}", exist_ok=True)
-        os.rename(f"{data_path}/train/{row[0]}.jpeg", f"{data_path}/train/{subfolder}/{row[0]}.jpeg")
-
 
 
 if __name__ == '__main__':
-    preprocess_retinopathy(0, 100, "train", "train", "trainLabels.csv")
+
+    parser = argparse.ArgumentParser(description='Preprocess the Diabetic Retinopathy dataset')
+    parser.add_argument('dataset_path', type=str, help='Path to the dataset')
+    parser.add_argument('--train', action='store_true', help='Preprocess the training set')
+    parser.add_argument('--test', action='store_true', help='Preprocess the test set')
+    args = parser.parse_args()
+
+    if args.train:
+        preprocess_retinopathy("train", "train", "trainLabels.csv", args.dataset_path)
+    if args.test:
+        preprocess_retinopathy("test", "test", "retinopathy_solution.csv", args.dataset_path)

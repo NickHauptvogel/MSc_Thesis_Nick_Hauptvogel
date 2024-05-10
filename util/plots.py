@@ -1,3 +1,5 @@
+import argparse
+
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import json
@@ -9,8 +11,32 @@ import pickle
 
 from ensemble_prediction import get_use_case_data
 
-def plot_lr_loss(outpath, only_first=False):
 
+def get_x_ticks(num_ticks):
+    """
+    Get the x-ticks for a plot with a given number of ticks.
+    :param num_ticks: Number of ticks
+    :return: List of ticks
+    """
+    if num_ticks >= 200:
+        every_ = 50
+    elif num_ticks >= 100:
+        every_ = 20
+    elif num_ticks >= 50:
+        every_ = 10
+    elif num_ticks >= 20:
+        every_ = 2
+    else:
+        every_ = 1
+    return every_
+
+def plot_lr_loss(outpath, only_first=False, figsize=(5, 3)):
+    """
+    Plot the learning rate and loss for each training run.
+    :param outpath: Path to the folder containing the scores files
+    :param only_first: If True, only plot the first scores file
+    :param figsize: Figure size
+    """
     # Find all folders that contain a scores file
     scores_files = []
     for root, subdirs, files in os.walk(outpath):
@@ -19,11 +45,9 @@ def plot_lr_loss(outpath, only_first=False):
                 scores_files.append(os.path.join(root, file))
     scores_files = sorted(scores_files)
 
+    # If only_first is True, only plot the first scores file
     if only_first:
         scores_files = [scores_files[0]]
-
-    figsize = (6, 4)
-
 
     for scores_file in scores_files:
         outpath = os.path.dirname(scores_file) + '/'
@@ -35,9 +59,10 @@ def plot_lr_loss(outpath, only_first=False):
             continue
         else:
             scores_file = scores_file[0]
-        with open(outpath+scores_file, 'r') as f:
+        with open(outpath + scores_file, 'r') as f:
             scores = json.load(f)
 
+        # Get learning rate and loss
         loss = scores['history']['loss']
         if 'lr' in scores['history']:
             lr = scores['history']['lr']
@@ -46,29 +71,20 @@ def plot_lr_loss(outpath, only_first=False):
         else:
             lr = np.ones(len(loss))
         lr = np.array(lr)
-        scale = 1/np.max(lr)
+        # Scale the learning rate to start at 1
+        scale = 1 / np.max(lr)
         epochs = range(1, len(loss) + 1)
-
-        if len(loss) >= 200:
-            every_ = 20
-        elif len(loss) >= 100:
-            every_ = 10
-        elif len(loss) >= 50:
-            every_ = 5
-        elif len(loss) >= 20:
-            every_ = 2
-        else:
-            every_ = 1
+        every_ = get_x_ticks(len(loss))
 
         to_plot = [
-            ('Loss', ['loss'], (0, 1.1*max(loss)), 'upper right'),
-            ('Accuracy', ['accuracy'], (0, 1), 'lower left'),
+            ('Loss', ['loss'], (0, 1.1 * max(loss)), 'upper right'),
+            ('Accuracy', ['accuracy'], (0, 1), 'lower right'),
         ]
         if 'auc' in scores['history']:
-            to_plot.append(('AUC', ['auc'], (0, 1), 'lower left'))
+            to_plot.append(('AUC', ['auc'], (0, 1), 'lower right'))
         if 'precision' in scores['history']:
-            to_plot.append(('Precision', ['precision'], (0, 1), 'lower left'))
-            to_plot.append(('Recall', ['recall'], (0, 1), 'lower left'))
+            to_plot.append(('Precision', ['precision'], (0, 1), 'lower right'))
+            to_plot.append(('Recall', ['recall'], (0, 1), 'lower right'))
 
         for (name, hist_names, ylim, legend_loc) in to_plot:
             lower_name = name.lower()
@@ -77,11 +93,10 @@ def plot_lr_loss(outpath, only_first=False):
             plt.setp(ax.spines.values(), color='#DDDDDD')
 
             ax.grid(which='major', color='#DDDDDD', linewidth=0.8, zorder=0)
-            # Show the minor grid as well. Style it in very light gray as a thin,
-            # dotted line.
-            ax.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.5)
+            # Show the minor grid as well. Style it in very light gray as a thin, dotted line.
+            #ax.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.5)
             # Make the minor ticks and gridlines show.
-            ax.minorticks_on()
+            #ax.minorticks_on()
             ax.set_xticks(np.arange(1, len(loss) + 1, 1))
             # Labels: Every xth label is shown, starting from the xth label
             labels = [""] * len(loss)
@@ -92,9 +107,9 @@ def plot_lr_loss(outpath, only_first=False):
             ax.set_xlim(0, len(loss) + 1)
 
             for n in hist_names:
-                ax.plot(epochs, scores['history'][n], label=f'Training {name}')
-                ax.plot(epochs, scores['history']['val_'+n], label=f'Validation {name}')
-            ax.plot(epochs, scale*lr, label='Learning rate (scaled)', c=(0.1, 0.1, 0.1, 0.5))
+                ax.plot(epochs, scores['history'][n], label=f'Training {name}', color='darkolivegreen')
+                ax.plot(epochs, scores['history']['val_' + n], label=f'Validation {name}', color='darkorange')
+            ax.plot(epochs, scale * lr, label='Learning rate (scaled)', c=(0.1, 0.1, 0.1, 0.5))
             ax.set_title(f'Training and Validation {name}')
             ax.set_xlabel('Epochs')
             ax.set_ylabel(name)
@@ -107,8 +122,12 @@ def plot_lr_loss(outpath, only_first=False):
             plt.savefig(outpath + f'{lower_name}.pdf')
             plt.close()
 
-def plot_pac_bayes(outpath):
 
+def plot_pac_bayes(outpath):
+    """
+    Plot the accuracy and weights for each ensemble member.
+    :param outpath: Path to the folder containing the pac-bayes folder
+    """
     # Find all pac-bayes folders
     pac_bayes_folders = []
     for root, subdirs, files in os.walk(outpath):
@@ -117,32 +136,25 @@ def plot_pac_bayes(outpath):
     pac_bayes_folders = sorted(pac_bayes_folders)
 
     for outpath in pac_bayes_folders:
-        # Load the data
+        # Load the distribution of weights and accuracies
         rhos_file = [f for f in os.listdir(outpath) if f.endswith('rhos.csv')][0]
         risks_file = [f for f in os.listdir(outpath) if f.endswith('iRProp.csv')][0]
         df_rhos = pd.read_csv(outpath + rhos_file, sep=';')
         df_risks = pd.read_csv(outpath + risks_file, sep=';')
         print(outpath + rhos_file)
         print(outpath + risks_file)
-
-        num_members = len(df_rhos['h'])
-        if num_members > 50:
-            every_ = 5
-        elif num_members > 30:
-            every_ = 2
-        else:
-            every_ = 1
+        every_ = get_x_ticks(len(df_rhos['h']))
 
         print("number of val points: ", df_risks['n_min'][0])
         print("number of tandem val points: ", df_risks['n2_min'][0])
 
         # 3 subplots
-        fig, ax = plt.subplots(3, 1, figsize=(10, 6))
+        fig, ax = plt.subplots(3, 1, figsize=(5, 3))
         for a in ax:
             plt.setp(a.spines.values(), color='#DDDDDD')
             a.grid(which='major', color='#EEEEEE', linewidth=0.8, zorder=0)
         # Plot the accuracy for each member in subplot 1 as bar plot without spacing between the bars
-        ax[0].bar(df_rhos['h'], 1-df_rhos['risk'], label='Accuracy', color='#222222', width=1.05, zorder=3)
+        ax[0].bar(df_rhos['h'], 1 - df_rhos['risk'], label='Accuracy', color='#222222', width=1.05, zorder=3)
         # Plot the weights
         ax[1].bar(df_rhos['h'], df_rhos['rho_lam'], label='FO', color='tab:orange', zorder=3)
         ax[2].bar(df_rhos['h'], df_rhos['rho_mv2'], label='TND', color='tab:green', zorder=3)
@@ -155,123 +167,49 @@ def plot_pac_bayes(outpath):
 
         for a in ax:
             a.set_xticks(np.arange(1, len(df_rhos['h']) + 1, 1))
-            # Labels: Every 5th label is shown, starting from the xth label
+            # Labels: Every xth label is shown, starting from the xth label
             labels = [""] * len(df_rhos['h'])
             for i in range(1, len(df_rhos['h']) + 1):
                 if i % every_ == 0:
-                    labels[i-1] = str(i)
+                    labels[i - 1] = str(i)
             a.set_xticklabels(labels)
             a.tick_params(color='#DDDDDD', which='both')
-            a.set_xlim(1, len(df_rhos['h']))
-            a.legend(loc='upper left')
+            a.set_xlim(0.5, len(df_rhos['h']) + 0.5)
 
         plt.suptitle('Accuracy and weight distribution for ensemble')
         plt.tight_layout()
         plt.savefig(outpath + 'risk_weights.pdf')
         plt.close()
 
-        # Plot the bounds for the different ensemble types
-        fig, ax = plt.subplots(1, 1, figsize=(6, 4))
-        plt.setp(ax.spines.values(), color='#DDDDDD')
-        ax.grid(which='major', color='#DDDDDD', linewidth=0.8, zorder=0)
-        # Show the minor grid as well. Style it in very light gray as a thin,
-        # dotted line.
-        ax.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.5)
-        # Make the minor ticks and gridlines show.
-        ax.minorticks_on()
-        # Plot the bounds for the different ensemble types next to each other
-        dist_ = 0.21
-        width_ = 0.4
-        ax.bar([1 - dist_, 2 - dist_], [1-df_risks['unf_pbkl'][0], 1-df_risks['unf_tnd'][0]],
-               label='Before optim.', color=(0.6, 0.2, 0.2, 0.5), width=width_, edgecolor=(0.6, 0.2, 0.2, 1.), linewidth=1,
-               zorder=3)
-        ax.bar([1 + dist_, 2 + dist_], [1-df_risks['lam_pbkl'][0], 1-df_risks['tnd_tnd'][0]],
-               label='After optim.', color=(0.2, 0.6, 0.2, 0.5), width=width_, edgecolor=(0.2, 0.6, 0.2, 1.), linewidth=1,
-               zorder=3)
-
-        min_y = 1-max([df_risks['unf_pbkl'][0], df_risks['lam_pbkl'][0], df_risks['unf_tnd'][0], df_risks['tnd_tnd'][0]])
-        max_y = 1-min([df_risks['unf_pbkl'][0], df_risks['lam_pbkl'][0], df_risks['unf_tnd'][0], df_risks['tnd_tnd'][0]])
-        ax.set_ylim(max(0, min_y - 0.1), min(1, max_y + 0.1))
-
-        ax.set_xticks([1, 2])
-        ax.set_xticklabels(['First order', 'Tandem loss'])
-        ax.tick_params(color='#DDDDDD', which='both')
-        ax.set_xlabel('Weighting scheme')
-        ax.set_ylabel('Accuracy')
-        ax.set_title('Accuracy bounds of different ensemble weightings')
-        ax.legend(loc='upper right')
-        plt.tight_layout()
-        plt.savefig(outpath + 'risk_bounds.pdf')
-        plt.close()
-
-        # Plot the risks for the different ensemble types
-        fig, ax = plt.subplots(1, 1, figsize=(6, 4))
-        plt.setp(ax.spines.values(), color='#DDDDDD')
-        ax.grid(which='major', color='#DDDDDD', linewidth=0.8, zorder=0)
-        # Show the minor grid as well. Style it in very light gray as a thin,
-        # dotted line.
-        ax.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.5)
-        # Make the minor ticks and gridlines show.
-        ax.minorticks_on()
-        # Plot the bounds for the different ensemble types next to each other
-        ax.bar([1 + 0.1, 2 + 0.1, 3 + 0.1],
-               [1-df_risks['unf_mv_risk_softmax_avg'][0], 1-df_risks['lam_mv_risk_softmax_avg'][0],
-                1-df_risks['tnd_mv_risk_softmax_avg'][0]],
-               label='Softmax average', color=(0.2, 0.6, 0.2, 0.5), width=0.17, edgecolor=(0.2, 0.6, 0.2, 1.),
-               linewidth=1,
-               zorder=3)
-        ax.bar([1 - 0.1, 2 - 0.1, 3 - 0.1], [1-df_risks['unf_mv_risk_maj_vote'][0], 1-df_risks['lam_mv_risk_maj_vote'][0],
-                                             1-df_risks['tnd_mv_risk_maj_vote'][0]],
-               label='Majority vote', color=(0., 0., 1., 0.5), width=0.17, edgecolor=(0., 0., 1., 1.), linewidth=1,
-               zorder=3)
-
-        ax.set_ylim(0.5, 1.0)
-        min_uniform = min([df_risks['unf_mv_risk_softmax_avg'][0], df_risks['unf_mv_risk_maj_vote'][0]])
-        min_lambda = min([df_risks['lam_mv_risk_softmax_avg'][0], df_risks['lam_mv_risk_maj_vote'][0]])
-        min_tandem = min([df_risks['tnd_mv_risk_softmax_avg'][0], df_risks['tnd_mv_risk_maj_vote'][0]])
-        print("minimal risk uniform: ", min_uniform, " (accuracy: ", 1 - min_uniform, ")")
-        print("minimal risk lambda: ", min_lambda, " (accuracy: ", 1 - min_lambda, ")")
-        print("minimal risk tandem: ", min_tandem, " (accuracy: ", 1 - min_tandem, ")")
-        # Label bars with accuracies
-        ax.text(1.15, 1 - df_risks['unf_mv_risk_softmax_avg'][0], f"{1-df_risks['unf_mv_risk_softmax_avg'][0]:.3f}", ha='center', va='bottom')
-        ax.text(2.15, 1 - df_risks['lam_mv_risk_softmax_avg'][0], f"{1-df_risks['lam_mv_risk_softmax_avg'][0]:.3f}", ha='center', va='bottom')
-        ax.text(3.15, 1 - df_risks['tnd_mv_risk_softmax_avg'][0], f"{1-df_risks['tnd_mv_risk_softmax_avg'][0]:.3f}", ha='center', va='bottom')
-        ax.text(0.85, 1 - df_risks['unf_mv_risk_maj_vote'][0], f"{1-df_risks['unf_mv_risk_maj_vote'][0]:.3f}", ha='center', va='bottom')
-        ax.text(1.85, 1 - df_risks['lam_mv_risk_maj_vote'][0], f"{1-df_risks['lam_mv_risk_maj_vote'][0]:.3f}", ha='center', va='bottom')
-        ax.text(2.85, 1 - df_risks['tnd_mv_risk_maj_vote'][0], f"{1-df_risks['tnd_mv_risk_maj_vote'][0]:.3f}", ha='center', va='bottom')
-
-
-        ax.set_xticks([1, 2, 3])
-        ax.set_xticklabels(['Uniform', 'First Order', 'Tandem'])
-        ax.tick_params(color='#DDDDDD', which='both')
-        ax.set_xlabel('Weighting scheme')
-        ax.set_ylabel('Accuracy')
-        ax.set_title('Accuracy of different ensemble weightings')
-        ax.legend(loc='lower right')
-        plt.tight_layout()
-        plt.savefig(outpath + 'risks.pdf')
-        plt.close()
-
 
 def create_table_results(path, epoch_budget_folder, use_case, model_type):
+    """
+    Automatically create a table with the results for the different ensemble methods.
+    :param path: Path to the folder containing the experiments (per dataset and model)
+    :param epoch_budget_folder: Name of the ensemble size for the epoch budget experiments
+    :param use_case: Name of the use case. Can be 'cifar10', 'cifar100', 'imdb', 'retinopathy'
+    """
     use_case_data = get_use_case_data(use_case, model_type)
     # Get subdirectories
     experiments = [f.path for f in os.scandir(path) if f.is_dir()]
+    round_digits = 3
 
     display_name_order = {
         'original': (0, 'Original'),
         'sse': (3, 'SSE'),
         'bootstr': (2, 'Bagging'),
-        'original_checkpointing': (1, 'Original (checkp.)'),
+        'original_checkpointing': (1, 'Checkpointing'),
         'epoch_budget': (4, '')
     }
     experiments = sorted(experiments, key=lambda x: display_name_order[os.path.basename(x)][0])
 
     all_per_model = False
+    table_bounds = []
+    table_performances = []
     for e in experiments:
         if 'epoch_budget' in e:
             e = os.path.join(e, epoch_budget_folder)
-            exp_name = f'Ep.b. ({os.path.basename(e)})'
+            exp_name = f'Ep.b. ()'
         else:
             exp_name = display_name_order[os.path.basename(e)][1]
         # Get the pac-bayes folder
@@ -282,17 +220,38 @@ def create_table_results(path, epoch_budget_folder, use_case, model_type):
         # Open ensemble_results.pkl
         with open(os.path.join(e, 'ensemble_results.pkl'), 'rb') as f:
             ensemble_results = pickle.load(f)
-            uni_last = f"{round(ensemble_results['results']['uniform_last_per_model'][0][-1][-1], 4)}[{ensemble_results['results']['uniform_last_per_model'][0][-1][0]}]"
-            tnd_last = f"{round(ensemble_results['results']['tnd_last_per_model'][0][-1][-1], 4)}[{ensemble_results['results']['tnd_last_per_model'][0][-1][0]}]"
+            # Softmax average
+            uni_last_sa = (round(ensemble_results['results']['uniform_last_per_model'][0][-1][2], round_digits),
+                           ensemble_results['results']['uniform_last_per_model'][0][-1][0])
+            tnd_last_sa = (round(ensemble_results['results']['tnd_last_per_model'][0][-1][2], round_digits),
+                           ensemble_results['results']['tnd_last_per_model'][0][-1][0])
+            # Majority vote
+            tnd_last_mv = (round(ensemble_results['results']['tnd_last_per_model'][0][-1][1], round_digits),
+                           ensemble_results['results']['tnd_last_per_model'][1][-1][0])
             if any(['all_per_model' in k for k in ensemble_results['results'].keys()]):
                 all_per_model = True
-                uni_all = f"{round(ensemble_results['results']['uniform_all_per_model'][0][-1][-1], 4)}[{ensemble_results['results']['uniform_all_per_model'][0][-1][0]}]"
-                tnd_all = f"{round(ensemble_results['results']['tnd_all_per_model'][0][-1][-1], 4)}[{ensemble_results['results']['tnd_all_per_model'][0][-1][0]}]"
-                perf_res = f"{uni_last} & {tnd_last} & {uni_all} & {tnd_all}"
+                uni_all_sa = (round(ensemble_results['results']['uniform_all_per_model'][0][-1][2], round_digits),
+                              ensemble_results['results']['uniform_all_per_model'][0][-1][0])
+                tnd_all_sa = (round(ensemble_results['results']['tnd_all_per_model'][0][-1][2], round_digits),
+                              ensemble_results['results']['tnd_all_per_model'][0][-1][0])
+                tnd_all_mv = (round(ensemble_results['results']['tnd_all_per_model'][0][-1][1], round_digits),
+                              ensemble_results['results']['tnd_all_per_model'][1][-1][0])
+
+                # Get the maximum of the last and all performances for TND
+                max_tnd_sa = (max(tnd_last_sa[0], tnd_all_sa[0]), tnd_all_sa[1])
+                max_tnd_mv = (max(tnd_last_mv[0], tnd_all_mv[0]), tnd_all_mv[1])
+
+                performances_str = (f"{uni_last_sa[0]}[{uni_last_sa[1]}] & "
+                                    f"{tnd_last_sa[0]}[{tnd_last_sa[1]}] & "
+                                    f"{uni_all_sa[0]}[{uni_all_sa[1]}] & "
+                                    f"{tnd_all_sa[0]}[{tnd_all_sa[1]}]")
             else:
-                perf_res = f"{uni_last} & {tnd_last}"
+                max_tnd_sa = tnd_last_sa
+                max_tnd_mv = tnd_last_mv
+
+                performances_str = f"{uni_last_sa[0]}[{uni_last_sa[1]}] & {tnd_last_sa[0]}[{tnd_last_sa[1]}]"
                 if all_per_model:
-                    perf_res += " & &"
+                    performances_str += " & &"
 
             bayesian_ref = f"{use_case_data['baseline_acc'][0]}"
             # Find ensemble size as [0-9] in baseline name, e.g. [10]
@@ -301,14 +260,39 @@ def create_table_results(path, epoch_budget_folder, use_case, model_type):
                 ensemble_size = ensemble_size[0][1:-1]
                 bayesian_ref += f"[{ensemble_size}]"
 
-        print(f"{exp_name} & {round(1-df_risks['unf_tnd'][0], 4)} & {round(1-df_risks['tnd_tnd'][0], 4)} & {perf_res} & {round(ensemble_results['best_single_model_accuracy'], 4)} & {bayesian_ref} \\\\")
+            unf_bound = round(1 - df_risks['unf_tnd'][0], round_digits)
+            tnd_bound = round(1 - df_risks['tnd_tnd'][0], round_digits)
+
+        table_bounds.append(f"{exp_name} & {unf_bound} & {tnd_bound} & {max_tnd_sa[0]} & {max_tnd_mv[0]} \\\\")
+        table_performances.append(
+            f"{exp_name} & {performances_str} & {round(ensemble_results['best_single_model_accuracy'], round_digits)} & {bayesian_ref} \\\\")
+
+    print("Bounds:")
+    for t in table_bounds:
+        print(t)
+
+    print("Performances:")
+    for t in table_performances:
+        print(t)
 
 
 if __name__ == '__main__':
-    path = r'C:\Users\NHaup\Projects\Results\cifar10\resnet110'
-    #path = r"C:\Users\NHaup\OneDrive\Dokumente\Master_Studium\Semester_4\Thesis\Results\imdb"
-    use_case = 'cifar10'
-    model_type = 'ResNet110v1'
-    create_table_results(path, '03', use_case, model_type)
-    #plot_lr_loss(path, only_first=True)
-    #plot_pac_bayes(path)
+
+    parser = argparse.ArgumentParser(description='Plotting')
+    parser.add_argument('--path', type=str, help='Path to the folder containing the experiments')
+    parser.add_argument('--epoch_budget_folder', type=str, help='Name of the ensemble size for the epoch budget experiments')
+    parser.add_argument('--use_case', type=str, help='Name of the use case. Can be "cifar10", "cifar100", "imdb", "retinopathy"')
+    parser.add_argument('--model_type', type=str, help='Name of the model type. Can be "ResNet20v1", "ResNet110v1", "WideResNet28-10"')
+    parser.add_argument('--lr_loss', action='store_true', help='Plot the learning rate and loss')
+    parser.add_argument('--pac_bayes', action='store_true', help='Plot the PAC-Bayes bounds')
+    parser.add_argument('--table', action='store_true', help='Create a table with the results')
+    parser.add_argument('--only_first', action='store_true', help='Only plot the first scores file')
+
+    args = parser.parse_args()
+
+    if args.lr_loss:
+        plot_lr_loss(args.path, args.only_first)
+    if args.pac_bayes:
+        plot_pac_bayes(args.path)
+    if args.table:
+        create_table_results(args.path, args.epoch_budget_folder, args.use_case, args.model_type)
