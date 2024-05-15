@@ -1,4 +1,5 @@
 import argparse
+import sys
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
@@ -13,10 +14,10 @@ import pickle
 linestyles = ['dotted', 'dashed', 'dashdot', (0, (3, 5, 1, 5, 1, 5)), (0, (3, 1, 1, 1))]
 
 display_categories = {
-    'uniform_last_per_model': 'Uniform last',
-    'uniform_all_per_model': 'Uniform all',
-    'tnd_last_per_model': 'TND last',
-    'tnd_all_per_model': 'TND all',
+    'uniform_last_per_model': r'AVG$_u$ last',
+    'uniform_all_per_model': r'AVG$_u$ all',
+    'tnd_last_per_model': r'AVG$_\rho$ last',
+    'tnd_all_per_model': r'AVG$_\rho$ all',
 }
 
 colors = {
@@ -24,6 +25,13 @@ colors = {
     'uniform_all_per_model': 'peru',
     'tnd_last_per_model': 'olivedrab',
     'tnd_all_per_model': 'darkolivegreen',
+}
+
+use_case_display = {
+    'cifar10': 'CIFAR-10',
+    'cifar100': 'CIFAR-100',
+    'imdb': 'IMDB',
+    'retinopathy': 'EyePACS'
 }
 
 
@@ -48,7 +56,7 @@ def get_use_case_data(use_case: str, model_type: str = None):
             baseline_acc = [0.9666, 0.9699, 0.963]
             baseline_name = ['SWAG[10]', 'DE[10]', 'SGD']
     elif use_case == 'cifar100':
-        ylim = (0.75, 0.84)
+        ylim = (0.70, 0.84)
         if model_type == 'ResNet110v1':
             baseline_acc = [0.7808, 0.8241, 0.7734]
             baseline_name = ['cSGLD[10]', 'DE[10]', 'SGD']
@@ -62,8 +70,8 @@ def get_use_case_data(use_case: str, model_type: str = None):
         ylim = (0.83, 0.88)
         ylim_loss = (0.25, 1.0)
     elif use_case == 'retinopathy':
-        baseline_acc = [0.886, 0.903, 0.909, 0.916]
-        baseline_name = ['MAP', 'DE[3]', 'MC-Dr.', 'MC-Dr.[3]']
+        baseline_acc = [0.909, 0.916, 0.886, 0.903]
+        baseline_name = ['MC-Dr. [5]', 'MC-Dr. DE [15]', 'MAP', 'DE[3]']
         ylim = (0.86, 0.92)
     else:
         raise ValueError('Unknown use case')
@@ -152,9 +160,6 @@ def plot_lr_loss(outpath, only_first=False, figsize=(5, 3)):
         for (name, hist_name) in to_plot:
             lower_name = name.lower()
 
-            min_ = min(np.min(scores['history'][hist_name]), np.min(scores['history']['val_' + hist_name]))
-            max_ = max(np.max(scores['history'][hist_name]), np.max(scores['history']['val_' + hist_name]))
-
             fig, ax = plt.subplots(1, 1, figsize=figsize)
             plt.setp(ax.spines.values(), color='#DDDDDD')
 
@@ -180,6 +185,9 @@ def plot_lr_loss(outpath, only_first=False, figsize=(5, 3)):
             #ax.set_title(f'Train and Validation {name}')
             ax.set_xlabel('Epochs')
             ax.set_ylabel(name)
+
+            min_ = min(np.min(scores['history'][hist_name]), np.min(scores['history']['val_' + hist_name]), np.min(scale * lr))
+            max_ = max(np.max(scores['history'][hist_name]), np.max(scores['history']['val_' + hist_name]))
             y_lim = (0.9 * min_, 1.1 * max_)
             plt.ylim(y_lim)
             plt.xlim(1, len(loss))
@@ -232,7 +240,7 @@ def plot_pac_bayes(outpath):
 
         # x axis label for last subplot
         ax[2].set_xlabel('M')
-        ax[0].set_ylabel('Accuracy')
+        ax[0].set_ylabel(r'$\hat{A}$')
         ax[1].set_ylabel('ρ')
         ax[2].set_ylabel('ρ')
 
@@ -262,14 +270,17 @@ def plot_performances(folder, m, use_case, model_type):
         results_dict = {}
         for i in range(2, m+1):
             print(f'Ensemble size: {i}')
-            path_ = os.path.join(folder, f'{i:02d}')
+            folder_ = os.path.join(folder, f'{i:02d}')
             models = 0
             # Get number of models (in case not all are present)
-            for root, dirs, files in os.walk(path_):
+            for root, dirs, files in os.walk(folder_):
                 for file in files:
                     if file.endswith('scores.json'):
                         models += 1
-            with open(os.path.join(path_, 'ensemble_results.pkl'), 'rb') as f:
+            if not os.path.exists(os.path.join(folder_, 'ensemble_results.pkl')):
+                print(f'File {os.path.join(folder_, "ensemble_results.pkl")} does not exist. Have you run ensemble prediction?')
+                sys.exit(1)
+            with open(os.path.join(folder_, 'ensemble_results.pkl'), 'rb') as f:
                 results = pickle.load(f)
             results = results['results']
             for category in results.keys():
@@ -289,6 +300,9 @@ def plot_performances(folder, m, use_case, model_type):
         best_single_model_loss = None
         results = results_dict
     else:
+        if not os.path.exists(os.path.join(folder, 'ensemble_results.pkl')):
+            print(f'Path {os.path.join(folder, "ensemble_results.pkl")} does not exist. Have you run ensemble prediction?')
+            sys.exit(1)
         with open(os.path.join(folder, 'ensemble_results.pkl'), 'rb') as f:
             results = pickle.load(f)
         categories = results['results'].keys()
@@ -302,9 +316,9 @@ def plot_performances(folder, m, use_case, model_type):
     for f, figsize in [(os.path.join(folder, 'large'), (9, 6)), (os.path.join(folder, 'small'), (6, 4))]:
         os.makedirs(f, exist_ok=True)
         for plot_majority_vote, single_model_reference, mean_idx, std_idx, y_label, ylim_name, baseline_name, filename in [
-            (True, best_single_model_accuracy, 0, 1, 'Accuracy', 'ylim', 'baseline_acc', 'ensemble_accs'),
-            (True, best_single_model_accuracy, 0, 1, 'Accuracy', 'ylim', 'baseline_acc', 'ensemble_accs_majority_vote'),
-            (False, best_single_model_loss, 2, 3, 'Cross-entropy', 'ylim_loss', 'baseline_loss', 'ensemble_losses')
+            (False, best_single_model_accuracy, 0, 1, '$\hat{A}$', 'ylim', 'baseline_acc', 'ensemble_accs'),
+            (True, best_single_model_accuracy, 0, 1, '$\hat{A}$', 'ylim', 'baseline_acc', 'ensemble_accs_majority_vote'),
+            (False, best_single_model_loss, 2, 3, '$\hat{L}_{CE}$', 'ylim_loss', 'baseline_loss', 'ensemble_losses')
         ]:
             fig, ax = plt.subplots(1, 1, figsize=figsize)
             plt.setp(ax.spines.values(), color='#DDDDDD')
@@ -328,7 +342,7 @@ def plot_performances(folder, m, use_case, model_type):
                 color = colors[category]
                 if plot_majority_vote:
                     plt.plot(ensemble_mean[:, 0], ensemble_mean[:, 2], label=f'{display_categories[category]}',color=color)
-                    plt.plot(ensemble_mean[:, 0], ensemble_mean[:, 1], color=color, linestyle='--')
+                    plt.plot(ensemble_mean[:, 0], ensemble_mean[:, 1], label=f'{display_categories[category].replace("AVG", "MV")}', color=color, linestyle='--')
                     # Std as area around the mean
                     plt.fill_between(ensemble_mean[:, 0], ensemble_mean[:, 1] - ensemble_std[:, 1],
                                      ensemble_mean[:, 1] + ensemble_std[:, 1], alpha=0.3, color=color, zorder=3)
@@ -344,7 +358,7 @@ def plot_performances(folder, m, use_case, model_type):
             plt.ylabel(y_label)
             print(min_, max_)
             if np.isfinite(max_):
-                ylim = (max(min_ - 0.005, use_case_data[ylim_name][0]), min(max_ + 0.005, use_case_data[ylim_name][1]))
+                ylim = (max(min_ - 0.005, use_case_data[ylim_name][0]), max(max_ + 0.005, use_case_data[ylim_name][1]))
             else:
                 ylim = (max(min_ - 0.005, use_case_data[ylim_name][0]), use_case_data[ylim_name][1])
             plt.ylim(ylim)
@@ -377,6 +391,9 @@ def plot_performances(folder, m, use_case, model_type):
             # Put a legend below current axis
             ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15),
                       fancybox=True, shadow=True, ncol=4)
+            props = dict(boxstyle='round', facecolor='white', alpha=0.5)
+            ax.text(0.02, 0.97, f"{use_case_display[use_case]} {model_type}", transform=ax.transAxes, fontsize=9,
+                    verticalalignment='center', bbox=props)
             plt.savefig(os.path.join(f, filename + ".pdf"), bbox_inches="tight")
             plt.close()
 
@@ -391,7 +408,7 @@ def create_table_results(path, m, use_case, model_type):
     """
     use_case_data = get_use_case_data(use_case, model_type)
     # Get subdirectories
-    experiments = [f.path for f in os.scandir(path) if f.is_dir()]
+    experiments = [f.path for f in os.scandir(path) if f.is_dir() and 'old' not in f.name]
     round_digits = 3
 
     display_name_order = {
@@ -403,7 +420,6 @@ def create_table_results(path, m, use_case, model_type):
     }
     experiments = sorted(experiments, key=lambda x: display_name_order[os.path.basename(x)][0])
 
-    all_per_model = False
     table_bounds = []
     table_performances = []
     for e in experiments:
@@ -442,8 +458,11 @@ def create_table_results(path, m, use_case, model_type):
         # Open ensemble_results.pkl
         with open(os.path.join(e, 'ensemble_results.pkl'), 'rb') as f:
             ensemble_results = pickle.load(f)
-            # Index for m either m-2 or the number of models in the ensemble
-            max_m_to_evaluate = min(m-2, len(ensemble_results['results']['uniform_last_per_model'][0])-1)
+            if m is not None:
+                # Index for m either m-2 or the number of models in the ensemble
+                max_m_to_evaluate = min(m-2, len(ensemble_results['results']['uniform_last_per_model'][0])-1)
+            else:
+                max_m_to_evaluate = len(ensemble_results['results']['uniform_last_per_model'][0])-1
             # Softmax average
             uni_last_sa = (round(ensemble_results['results']['uniform_last_per_model'][0][max_m_to_evaluate][2], round_digits),
                            ensemble_results['results']['uniform_last_per_model'][0][max_m_to_evaluate][0])
@@ -453,7 +472,6 @@ def create_table_results(path, m, use_case, model_type):
             tnd_last_mv = (round(ensemble_results['results']['tnd_last_per_model'][0][max_m_to_evaluate][1], round_digits),
                            ensemble_results['results']['tnd_last_per_model'][0][max_m_to_evaluate][0])
             if any(['all_per_model' in k for k in ensemble_results['results'].keys()]):
-                all_per_model = True
                 uni_all_sa = (round(ensemble_results['results']['uniform_all_per_model'][0][max_m_to_evaluate][2], round_digits),
                               ensemble_results['results']['uniform_all_per_model'][0][max_m_to_evaluate][0])
                 tnd_all_sa = (round(ensemble_results['results']['tnd_all_per_model'][0][max_m_to_evaluate][2], round_digits),
@@ -472,10 +490,7 @@ def create_table_results(path, m, use_case, model_type):
             else:
                 max_tnd_sa = tnd_last_sa
                 max_tnd_mv = tnd_last_mv
-
-                performances_str = f"{uni_last_sa[0]}[{uni_last_sa[1]}] & {tnd_last_sa[0]}[{tnd_last_sa[1]}]"
-                if all_per_model:
-                    performances_str += " & &"
+                performances_str = f"{uni_last_sa[0]}[{uni_last_sa[1]}] & {tnd_last_sa[0]}[{tnd_last_sa[1]}] & - & -"
 
             bayesian_ref = f"{use_case_data['baseline_acc'][0]}"
             # Find ensemble size as [0-9] in baseline name, e.g. [10]
