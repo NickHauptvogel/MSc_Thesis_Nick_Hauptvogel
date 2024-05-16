@@ -1,0 +1,159 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE
+.idea
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# celery beat schedule file
+celerybeat-schedule
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+
+# irrelevant experiments
+NeurIPS2021/AdaBoost_num_trees.py
+NeurIPS2021/mu.py
+NeurIPS2021/muBernstein.py
+NeurIPS2021/helpers/run_mu.sh
+NeurIPS2021/helpers/run_muBernstein.sh
+NeurIPS2022/uniform.py
+
+# abc related
+NeurIPS2021/plots/figure/abc
+NeurIPS2021/plots/figure/abc/*
+NeurIPS2021/plots/table/abc
+NeurIPS2021/plots/table/abc/*
+
+# Data and out
+data
+data/*
+out
+out/*
+
+# Links in subdiretories
+sample/mvb
+NeurIPS2020/mvb
+NeurIPS2021/mvb
+NeurIPS2022/mvb
+Sparsification/mvb
+
+# Subdirectories/experiments to exclude
+Sparsification
+
+# Plots
+*.pdf
+datasets
+datasets/*
+*.aux
+
+# Tables
+NeurIPS2022/plots/figure/mce/bounds_optimized_comparison.tex
+NeurIPS2022/plots/figure/mce/mvrisk_optimized_comparison.tex
+NeurIPS2022/plots/figure/mce/plot_rhos.tex
+NeurIPS2022/plots/figure/rfc/bounds_optimized_comparison.tex
+NeurIPS2022/plots/figure/rfc/mvrisk_optimized_comparison.tex
+NeurIPS2022/plots/figure/rfc/plot_rhos.tex
+NeurIPS2022/plots/table
+NeurIPS2022/plots/table/*
+*.csv
+*_table.tex
+
+
+# png Plots
+*.png
