@@ -1,15 +1,11 @@
 #!/bin/bash
 
-#SBATCH -o epoch_budget_%a.out
 #SBATCH --time=05:00:00
 #SBATCH --gres=gpu:titanx:1
 #SBATCH --array=1-20
 
 # Declare output folder as variable
-folder="imdb/"
 out_folder="results/epoch_budget"
-
-nvidia-smi
 
 # Run experiment
 printf "\n\n* * * Run SGD for cluster size = $SLURM_ARRAY_TASK_ID. * * *\n\n\n"

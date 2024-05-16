@@ -177,4 +177,3 @@ dependencies:
       - pip==24.0
       - setuptools==69.2.0
       - tensorflow-probability==0.12.2
-prefix: /home/gkb738/.conda/envs/TF_KERAS_GPU

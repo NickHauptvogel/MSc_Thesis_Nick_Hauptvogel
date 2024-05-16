@@ -4,8 +4,20 @@
 #SBATCH --gres=gpu:titanx:1
 #SBATCH --array=1-10
 
-# Declare output folder as variable
-out_folder="results/retinopathy/resnet50/bootstr"
+####################################
+# Declare variables
+out_folder="results/retinopathy/resnet50/original"
+model_type="ResNet50v1"
+use_case="retinopathy"
+initial_lr=0.00023072
+l2_reg=0.00010674
+lr_schedule="retinopathy"
+epochs=90
+checkpoint_every=15
+options="" # "" or "--bootstrapping"
+
+####################################
+
 
 export CUDNN_PATH=$HOME/.conda/envs/TF_KERAS_3_GPU/lib/python3.10/site-packages/nvidia/cudnn
 export LD_LIBRARY_PATH=$CUDNN_PATH/lib:$HOME/TensorRT-8.6.1.6/lib:$LD_LIBRARY_PATH
@@ -26,16 +38,14 @@ python -m training \
     --batch_size=8 \
     --accumulation_steps=4 \
     --validation_split=0.0 \
-    --epochs=90 \
-    --model_type="ResNet50v1" \
-    --initial_lr=0.00023072 \
-    --l2_reg=0.00010674 \
+    --epochs=$epochs \
+    --model_type=$model_type \
+    --initial_lr=$initial_lr \
+    --l2_reg=$l2_reg \
     --checkpointing \
-    --checkpoint_every=15 \
-    --optimizer=sgd \
-    --nesterov \
-    --momentum=0.9901533 \
-    --use_case="retinopathy" \
-    --lr_schedule="retinopathy" \
+    --checkpoint_every=$checkpoint_every \
+    --optimizer=adam \
+    --use_case=$use_case \
+    --lr_schedule=$lr_schedule \
     --image_size=512 \
-    --bootstrapping
+    $options

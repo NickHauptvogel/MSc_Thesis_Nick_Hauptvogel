@@ -3,12 +3,9 @@ import tensorflow as tf
 import os
 import pickle
 import argparse
-import sys
 import json
 from tqdm import tqdm
 
-# Add parent directory to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from MajorityVoteBounds.NeurIPS2020.optimize import optimize
 
 
@@ -130,7 +127,7 @@ def load_all_predictions(folder: str, max_ensemble_size: int, test_pred_file_nam
     return y_pred
 
 
-def ensemble_prediction(use_case: str,
+def ensemble_evaluation(use_case: str,
                         folder: str,
                         num_ensemble_members: int,
                         checkpoints_per_model:int,
@@ -296,7 +293,7 @@ def main():
     parser = argparse.ArgumentParser(description='Ensemble prediction')
     parser.add_argument('--path', type=str, default='results/cifar10/resnet20/original',
                         help='Folder with the models for one experiment')
-    parser.add_argument('-n', '--num_ensemble_members', type=int, default=50,
+    parser.add_argument('-m', '--num_ensemble_members', type=int, default=50,
                         help='Number of ensemble members')
     parser.add_argument('-cp', '--checkpoints_per_model', type=int, default=1,
                         help='Number of checkpoints per independent model')
@@ -338,7 +335,7 @@ def main():
                 for file in files:
                     if file.endswith('scores.json'):
                         models += 1
-            ensemble_prediction(folder=path_,
+            ensemble_evaluation(folder=path_,
                                 num_ensemble_members=models,
                                 checkpoints_per_model=checkpoints_per_model,
                                 use_case=use_case,
@@ -347,7 +344,7 @@ def main():
                                 test_pred_file_name=test_pred_file_name,
                                 start_size=models)
     else:
-        ensemble_prediction(folder=path,
+        ensemble_evaluation(folder=path,
                             num_ensemble_members=num_ensemble_members,
                             checkpoints_per_model=checkpoints_per_model,
                             use_case=use_case,

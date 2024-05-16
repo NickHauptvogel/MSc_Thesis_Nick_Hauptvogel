@@ -200,46 +200,31 @@ class UBDiabeticRetinopathyDetection(tfds.core.GeneratorBasedBuilder):
             ),
         ]
 
-    def generate_examples(self, images_dir_path, csv_path=None, csv_usage=None, start=None, stop=None):
-        return self._generate_examples(images_dir_path, csv_path, csv_usage, start, stop)
+    def generate_examples(self, images_dir_path, csv_path):
+        return self._generate_examples(images_dir_path, csv_path)
 
-    def _generate_examples(self, images_dir_path, csv_path=None, csv_usage=None, start=None, stop=None):
+    def _generate_examples(self, images_dir_path, csv_path):
         """Yields Example instances from given CSV.
 
     Args:
       images_dir_path: path to dir in which images are stored.
-      csv_path: optional, path to csv file with two columns: name of image and
+      csv_path: path to csv file with two columns: name of image and
         label. If not provided, just scan image directory, don't set labels.
-      csv_usage: optional, subset of examples from the csv file to use based on
-        the "Usage" column from the csv.
     """
-        if csv_path:
-            with tf.io.gfile.GFile(csv_path) as csv_f:
-                reader = csv.DictReader(csv_f)
-                data = [(row["image"], int(row["level"]))
-                        for row in reader
-                        if csv_usage is None or row["Usage"] == csv_usage]
-        else:
-            data = [(fname[:-5], -1)
-                    for fname in tf.io.gfile.listdir(images_dir_path)
-                    if fname.endswith(".jpeg")]
-
-        if start is not None and stop is not None:
-            if start >= len(data):
-                raise ValueError("Start index is out of range.")
-            if stop > len(data):
-                print("Setting stop index to the end of the dataset.")
-                stop = len(data)
-            data = data[start:stop]
+        with tf.io.gfile.GFile(csv_path) as csv_f:
+            reader = csv.DictReader(csv_f)
+            data = [(row["image"], int(row["level"]), row.get("Usage", None))
+                    for row in reader]
 
         logging.info("Using BuilderConfig %s.", self.builder_config.name)
 
-        for name, label in data:
+        for name, label, usage in data:
             image_filepath = "%s/%s.jpeg" % (images_dir_path, name)
             record = {
                 "name": name,
                 "image": self._process_image(image_filepath),
                 "label": label,
+                "usage": usage
             }
             yield name, record
 
@@ -376,11 +361,19 @@ def _mask_and_crop_to_radius(image,
 def preprocess_retinopathy(output_folder, folder, csv_name, dataset_path):
 
     dataset = UBDiabeticRetinopathyDetection()
-    os.makedirs(f"{dataset_path}/{output_folder}", exist_ok=True)
+    os.makedirs(f"{dataset_path}/{output_folder}/0", exist_ok=True)
+    os.makedirs(f"{dataset_path}/{output_folder}/1", exist_ok=True)
     for i, example in enumerate(dataset.generate_examples(f"{dataset_path}/{folder}", f"{dataset_path}/{csv_name}")):
-        print(example[0], "({})".format(i))
+        # Moderate, severe and proliferating cases are considered as positive (titled "moderate" in the paper)
+        binary_label = 1 if example[1]['label'] >= 2 else 0
+        output_folder_ = output_folder
+        if example[1]['usage'] is not None:
+            if example[1]['usage'] == "Public":
+                # Store validation images also in train folder
+                output_folder_ = "train"
         # Store the image in a file
-        with open(f"{dataset_path}/{output_folder}/{example[0]}.jpeg", "wb") as f:
+        with open(f"{dataset_path}/{output_folder_}/{binary_label}/{example[0]}.jpeg", "wb") as f:
+            print("Saving image", example[0], "with label", binary_label, "to", f"{dataset_path}/{output_folder_}/{binary_label}/{example[0]}.jpeg")
             f.write(example[1]['image'].read())
 
 
@@ -393,6 +386,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.train:
-        preprocess_retinopathy("train", "train", "trainLabels.csv", args.dataset_path)
+        preprocess_retinopathy("train", "train_raw", "trainLabels.csv", args.dataset_path)
     if args.test:
-        preprocess_retinopathy("test", "test", "retinopathy_solution.csv", args.dataset_path)
+        preprocess_retinopathy("test", "test_raw", "retinopathy_solution.csv", args.dataset_path)

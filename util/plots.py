@@ -521,7 +521,7 @@ def main():
     parser.add_argument('--epoch_budget_folder', type=str,
                         help='Name of the ensemble size for the epoch budget experiments')
     parser.add_argument('--lr_loss', action='store_true', help='Plot the learning rate and loss')
-    parser.add_argument('--m', type=int, help='Number of ensemble members to plot')
+    parser.add_argument('-m', '--num_ensemble_members', type=int, help='Number of ensemble members to plot')
     parser.add_argument('--performances', action='store_true', help='Plot the performances')
     parser.add_argument('--pac_bayes', action='store_true', help='Plot the PAC-Bayes bounds')
     parser.add_argument('--table', action='store_true', help='Create a table with the results')

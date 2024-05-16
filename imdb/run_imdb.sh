@@ -4,16 +4,19 @@
 #SBATCH --gres=gpu:titanx:1
 #SBATCH --array=1-10
 
-# Declare output folder as variable
-folder="imdb/"
-out_folder="results/sse"
+####################################
+# Declare variables
+out_folder="results/imdb/bootstr"
+epochs=50
+checkpoint_every=5
+options="--SSE_lr" # "" or "--SSE_lr" or "--bootstrapping"
+
+####################################
 
 # If SLURM_ARRAY_TASK_ID is not set, set it to 1
 if [ -z ${SLURM_ARRAY_TASK_ID+x} ]; then
     SLURM_ARRAY_TASK_ID=1
 fi
-
-nvidia-smi
 
 # Run experiment
 printf "\n\n* * * Run SGD for ID = $SLURM_ARRAY_TASK_ID. * * *\n\n\n"
@@ -23,10 +26,8 @@ python -m training \
     --out_folder=$out_folder \
     --nesterov \
     --map_optimizer \
-    --epochs=50 \
+    --epochs=$epochs \
     --validation_split=0.2 \
     --checkpointing \
-    --checkpoint_every=5 \
+    --checkpoint_every=$checkpoint_every \
     --SSE_lr
-    #--checkpoint_every_epoch \
-    #--initial_lr=0.001
