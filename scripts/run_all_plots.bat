@@ -1,8 +1,9 @@
-set results_path=C:\Users\NHaup\OneDrive\Dokumente\Master_Studium\Semester_4\Thesis\Results\imdb
+set results_path=PATH_TO_RESULTS
 set options=--performances --lr_loss --only_first --pac_bayes
 
 :: CNN LSTM IMDB
 python .\util\plots.py --path="%results_path%\imdb\original" -m=40 %options%
+python .\util\plots.py --path="%results_path%\imdb\original_checkpointing" -m=40 %options%
 python .\util\plots.py --path="%results_path%\imdb\bootstr" -m=40 %options%
 python .\util\plots.py --path="%results_path%\imdb\sse" -m=8 %options%
 python .\util\plots.py --path="%results_path%\imdb\epoch_budget" -m=20 %options%

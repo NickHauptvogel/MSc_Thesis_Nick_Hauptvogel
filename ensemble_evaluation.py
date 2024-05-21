@@ -65,6 +65,7 @@ def get_prediction(y_pred, y_test, indices, weights, num_classes):
 
         diversity = (np.apply_along_axis(lambda x: len(np.unique(x)), axis=1,
                                          arr=subset_y_pred_argmax_per_model)) / 2
+        ensemble_auc = tf.keras.metrics.AUC()(y_test, subset_y_pred_softmax_average).numpy()
     else:
         subset_y_pred_argmax_per_model = np.argmax(subset_y_pred, axis=2)
         subset_y_pred_softmax_average = np.argmax(subset_y_pred_ensemble, axis=1)
@@ -76,6 +77,8 @@ def get_prediction(y_pred, y_test, indices, weights, num_classes):
         # Diversity as number of classes in ensemble vote out of all classes
         diversity = (np.apply_along_axis(lambda x: len(np.unique(x)), axis=1,
                                          arr=subset_y_pred_argmax_per_model) - 1) / (num_classes - 1)
+        # AUC for multi-class classification not used
+        ensemble_auc = -1.0
 
     ensemble_diversity = np.mean(diversity)
     subset_y_pred_maj_vote = np.array(
@@ -90,6 +93,7 @@ def get_prediction(y_pred, y_test, indices, weights, num_classes):
     return (ensemble_acc_maj_vote,
             ensemble_acc_softmax_average,
             ensemble_loss,
+            ensemble_auc,
             ensemble_diversity,
             best_single_model_accuracy,
             best_single_model_loss)
@@ -193,11 +197,14 @@ def ensemble_evaluation(use_case: str,
         ensemble_losses_std = []
         ensemble_diversities_mean = []
         ensemble_diversities_std = []
+        ensemble_auc_mean = []
+        ensemble_auc_std = []
         for ensemble_size in tqdm(range(start_size, num_ensemble_members+1)):
             ensemble_accs_maj_vote = []
             ensemble_accs_softmax_average = []
             ensemble_losses = []
             ensemble_diversities = []
+            ensemble_aucs = []
             for _ in range(reps):
 
                 # Choose randomly ensemble_size integers from 0 to num_ensemble_members
@@ -212,6 +219,7 @@ def ensemble_evaluation(use_case: str,
                 per_ensemble_accs_softmax_average = []
                 per_ensemble_losses = []
                 per_ensemble_diversities = []
+                per_ensemble_auc = []
                 for i, (test_risk_indices, test_bound_indices) in enumerate(test_splits):
 
                     if 'tta' in category:
@@ -243,6 +251,7 @@ def ensemble_evaluation(use_case: str,
                     (ensemble_acc_maj_vote,
                      ensemble_acc_softmax_average,
                      ensemble_loss,
+                     ensemble_auc,
                      ensemble_diversity,
                      single_model_accuracy,
                      single_model_loss) = get_prediction(y_pred_, y_test_, indices, weights, num_classes)
@@ -256,11 +265,13 @@ def ensemble_evaluation(use_case: str,
                     per_ensemble_accs_softmax_average.append(ensemble_acc_softmax_average)
                     per_ensemble_losses.append(ensemble_loss)
                     per_ensemble_diversities.append(ensemble_diversity)
-    
+                    per_ensemble_auc.append(ensemble_auc)
+
                 ensemble_accs_maj_vote.append(np.mean(per_ensemble_accs_maj_vote))
                 ensemble_accs_softmax_average.append(np.mean(per_ensemble_accs_softmax_average))
                 ensemble_losses.append(np.mean(per_ensemble_losses))
                 ensemble_diversities.append(np.mean(per_ensemble_diversities))
+                ensemble_aucs.append(np.mean(per_ensemble_auc))
 
             ensemble_accs_mean.append((ensemble_size, np.mean(ensemble_accs_maj_vote), np.mean(ensemble_accs_softmax_average)))
             ensemble_accs_std.append((ensemble_size, np.std(ensemble_accs_maj_vote), np.std(ensemble_accs_softmax_average)))
@@ -271,13 +282,17 @@ def ensemble_evaluation(use_case: str,
             ensemble_losses_std.append((ensemble_size, np.std(ensemble_losses)))
             ensemble_diversities_mean.append((ensemble_size, np.mean(ensemble_diversities)))
             ensemble_diversities_std.append((ensemble_size, np.std(ensemble_diversities)))
+            ensemble_auc_mean.append((ensemble_size, np.mean(ensemble_aucs)))
+            ensemble_auc_std.append((ensemble_size, np.std(ensemble_aucs)))
         
         results[category] = (ensemble_accs_mean,
                              ensemble_accs_std,
                              ensemble_losses_mean,
                              ensemble_losses_std,
                              ensemble_diversities_mean,
-                             ensemble_diversities_std)
+                             ensemble_diversities_std,
+                             ensemble_auc_mean,
+                             ensemble_auc_std)
 
     # Save results
     with open(os.path.join(folder, 'ensemble_results.pkl'), 'wb') as f:
@@ -335,6 +350,9 @@ def main():
                 for file in files:
                     if file.endswith('scores.json'):
                         models += 1
+            if models == 0:
+                print(f'No models found in {path_}')
+                continue
             ensemble_evaluation(folder=path_,
                                 num_ensemble_members=models,
                                 checkpoints_per_model=checkpoints_per_model,

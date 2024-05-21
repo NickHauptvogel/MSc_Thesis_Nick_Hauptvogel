@@ -18,18 +18,14 @@ import pickle
 import pandas as pd
 
 # Add directories to path
-import sys
-sys.path.append('./util')
-sys.path.append('./models')
+from models.ResNet import resnet_v1, resnet_v2
+from models.WideResNet import wide_resnet
 
-from ResNet import resnet_v1, resnet_v2
-from WideResNet import wide_resnet
-
-from loss_functions import weighted_binary_cross_entropy
-from load_data import load_cifar
-from dataset_split import split_dataset
-from lr_schedules import cifar_schedule, sse_lr_schedule, step_decay_schedule, garipov_schedule
-from metrics import f1_score
+from util.loss_functions import weighted_binary_cross_entropy
+from util.load_data import load_cifar
+from util.dataset_split import split_dataset
+from util.lr_schedules import cifar_schedule, sse_lr_schedule, step_decay_schedule, garipov_schedule
+from util.metrics import f1_score
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--id', type=str, default='01', help='ID of the experiment')

@@ -1,8 +1,5 @@
 # Bayesian vs. PAC-Bayesian Deep Neural Network Ensembles
 
-This repository is the official implementation of [Bayesian vs. PAC-Bayesian Deep Neural Network
-Ensembles](TODO). 
-
 ## Abstract
 Bayesian neural networks address epistemic uncertainty by learning a posterior distribution over  model parameters. Sampling and weighting networks according to this posterior yields an ensemble model referred to as Bayes ensemble. 
 Ensembles of neural networks (deep ensembles) can profit from the cancellation of errors effect: Errors by ensemble members may average out and the deep ensemble  achieves better predictive performance than each individual network. 
@@ -11,7 +8,6 @@ In contrast, a weighted average of models where the weights are optimized by min
 The PAC-Bayesian weighting increases the robustness against correlated models and models with lower performance in an ensemble. This allows to safely add several models from the same learning process to an ensemble, instead of using early-stopping for selecting a single weight configuration.
 Our study presents empirical results supporting these conceptual considerations on four different classification datasets. We show that state-of-the-art Bayes ensembles from the literature, despite being computationally demanding, do not improve over simple uniformly weighted deep ensembles and cannot match the performance of deep ensembles weighted by optimizing the tandem loss, which additionally come with non-vacuous generalization guarantees.
 
->📋  Optional: include a graphic explaining your approach/main result, bibtex entry, link to demos, blog posts and tutorials
 
 ## Requirements
 

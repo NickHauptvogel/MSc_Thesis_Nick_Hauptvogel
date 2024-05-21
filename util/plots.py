@@ -41,6 +41,7 @@ def get_use_case_data(use_case: str, model_type: str = None):
     baseline_acc = None
     baseline_loss = None
     baseline_name = None
+    baseline_auc = None
     if use_case == 'cifar10':
         ylim = (0.9, 0.975)
         if model_type == 'ResNet20v1':
@@ -71,8 +72,9 @@ def get_use_case_data(use_case: str, model_type: str = None):
         ylim_loss = (0.25, 1.0)
     elif use_case == 'retinopathy':
         baseline_acc = [0.909, 0.916, 0.886, 0.903]
+        baseline_auc = [0.914, 0.925, 0.874, 0.903]
         baseline_name = ['MC-Dr. [5]', 'MC-Dr. DE [15]', 'MAP', 'DE[3]']
-        ylim = (0.86, 0.92)
+        ylim = (0.70, 0.92)
     else:
         raise ValueError('Unknown use case')
 
@@ -81,7 +83,8 @@ def get_use_case_data(use_case: str, model_type: str = None):
         'ylim_loss': ylim_loss,
         'baseline_acc': baseline_acc,
         'baseline_loss': baseline_loss,
-        'baseline_name': baseline_name
+        'baseline_name': baseline_name,
+        'baseline_auc': baseline_auc
     }
 
 
@@ -164,10 +167,6 @@ def plot_lr_loss(outpath, only_first=False, figsize=(5, 3)):
             plt.setp(ax.spines.values(), color='#DDDDDD')
 
             ax.grid(which='major', color='#DDDDDD', linewidth=0.8, zorder=0)
-            # Show the minor grid as well. Style it in very light gray as a thin, dotted line.
-            #ax.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.5)
-            # Make the minor ticks and gridlines show.
-            #ax.minorticks_on()
             ax.set_xticks(np.arange(1, len(loss) + 1, 1))
             # Labels: Every xth label is shown, starting from the xth label
             labels = [""] * len(loss)
@@ -219,14 +218,7 @@ def plot_pac_bayes(outpath):
         rhos_file = [f for f in os.listdir(outpath) if f.endswith('rhos.csv')][0]
         risks_file = [f for f in os.listdir(outpath) if f.endswith('iRProp.csv')][0]
         df_rhos = pd.read_csv(outpath + rhos_file, sep=';')
-        df_risks = pd.read_csv(outpath + risks_file, sep=';')
-        #print(outpath + rhos_file)
-        #print(outpath + risks_file)
         every_ = get_x_ticks(len(df_rhos['h']))
-
-        #print("number of val points: ", df_risks['n_min'][0])
-        #print("number of tandem val points: ", df_risks['n2_min'][0])
-
         # 3 subplots
         fig, ax = plt.subplots(3, 1, figsize=(5, 3))
         for a in ax:
@@ -264,6 +256,11 @@ def plot_pac_bayes(outpath):
 def plot_performances(folder, m, use_case, model_type):
     """
     Plot the performances of the different ensemble methods.
+
+    :param folder: Path to the folder containing the ensemble_results.pkl file
+    :param m: Number of ensemble members
+    :param use_case: Name of the use case. Can be 'cifar10', 'cifar100', 'imdb', 'retinopathy'
+    :param model_type: Name of the model. Can be 'ResNet20v1', 'ResNet110v1', 'WideResNet28-10'
     """
 
     if 'epoch_budget' in folder:
@@ -285,16 +282,18 @@ def plot_performances(folder, m, use_case, model_type):
             results = results['results']
             for category in results.keys():
                 if category not in results_dict:
-                    results_dict[category] = ([], [], [], [], [], [])
+                    results_dict[category] = ([], [], [], [], [], [], [], [])
 
                 # Take last value of each metric (only biggest ensemble computed per epoch budget step)
-                (mean, std, l_mean, l_std, div_mean, div_std) = results[category]
+                (mean, std, l_mean, l_std, div_mean, div_std, auc_mean, auc_std) = results[category]
                 results_dict[category][0].append((i, mean[-1][1], mean[-1][2]))
                 results_dict[category][1].append((i, std[-1][1], std[-1][2]))
                 results_dict[category][2].append((i, l_mean[-1][1]))
                 results_dict[category][3].append((i, l_std[-1][1]))
                 results_dict[category][4].append((i, div_mean[-1][1]))
                 results_dict[category][5].append((i, div_std[-1][1]))
+                results_dict[category][6].append((i, auc_mean[-1][1]))
+                results_dict[category][7].append((i, auc_std[-1][1]))
         categories = results_dict.keys()
         best_single_model_accuracy = None
         best_single_model_loss = None
@@ -313,13 +312,17 @@ def plot_performances(folder, m, use_case, model_type):
     every_ = get_x_ticks(m)
     use_case_data = get_use_case_data(use_case, model_type)
 
-    for f, figsize in [(os.path.join(folder, 'large'), (9, 6)), (os.path.join(folder, 'small'), (6, 4))]:
-        os.makedirs(f, exist_ok=True)
-        for plot_majority_vote, single_model_reference, mean_idx, std_idx, y_label, ylim_name, baseline_name, filename in [
+    performance_plots = [
             (False, best_single_model_accuracy, 0, 1, '$\hat{A}$', 'ylim', 'baseline_acc', 'ensemble_accs'),
             (True, best_single_model_accuracy, 0, 1, '$\hat{A}$', 'ylim', 'baseline_acc', 'ensemble_accs_majority_vote'),
             (False, best_single_model_loss, 2, 3, '$\hat{L}_{CE}$', 'ylim_loss', 'baseline_loss', 'ensemble_losses')
-        ]:
+        ]
+    if use_case == "retinopathy":
+        performance_plots.append((False, None, 6, 7, 'AUC', 'ylim', 'baseline_auc', 'ensemble_aucs'))
+
+    for f, figsize in [(os.path.join(folder, 'large'), (9, 6)), (os.path.join(folder, 'small'), (6, 4))]:
+        os.makedirs(f, exist_ok=True)
+        for plot_majority_vote, single_model_reference, mean_idx, std_idx, y_label, ylim_name, baseline_name, filename in performance_plots:
             fig, ax = plt.subplots(1, 1, figsize=figsize)
             plt.setp(ax.spines.values(), color='#DDDDDD')
             ax.grid(which='major', color='#DDDDDD', linewidth=0.8, zorder=0)
@@ -364,7 +367,7 @@ def plot_performances(folder, m, use_case, model_type):
             plt.ylim(ylim)
             # Horizontal line for the accuracy of the best model
             if single_model_reference is not None:
-                plt.axhline(single_model_reference, color='orange', linestyle='--', label='Best SGD')
+                plt.axhline(single_model_reference, color='orange', linestyle='--', label='SGD')
             if use_case_data[baseline_name] is not None:
                 # Horizontal line for baseline accuracy
                 for i, (acc, name) in enumerate(zip(use_case_data[baseline_name], use_case_data['baseline_name'])):
@@ -388,9 +391,9 @@ def plot_performances(folder, m, use_case, model_type):
             ax.set_position([box.x0, box.y0 + box.height * 0.2,
                              box.width, box.height * 0.9])
 
-            # Put a legend below current axis
+            # Put a legend below current axis without frame
             ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15),
-                      fancybox=True, shadow=True, ncol=4)
+                      fancybox=False, shadow=False, frameon=False, ncol=4)
             props = dict(boxstyle='round', facecolor='white', alpha=0.5)
             ax.text(0.02, 0.97, f"{use_case_display[use_case]} {model_type}", transform=ax.transAxes, fontsize=9,
                     verticalalignment='center', bbox=props)
@@ -402,7 +405,7 @@ def create_table_results(path, m, use_case, model_type):
     """
     Automatically create a table with the results for the different ensemble methods.
     :param path: Path to the folder containing the experiments (per dataset and model)
-    :param epoch_budget_folder: Name of the ensemble size for the epoch budget experiments
+    :param m: Number of ensemble members
     :param use_case: Name of the use case. Can be 'cifar10', 'cifar100', 'imdb', 'retinopathy'
     :param model_type: Name of the model. Can be 'ResNet20v1', 'ResNet110v1', 'WideResNet28-10'
     """
@@ -412,11 +415,12 @@ def create_table_results(path, m, use_case, model_type):
     round_digits = 3
 
     display_name_order = {
-        'original': (0, 'Original'),
+        'original': (0, 'Simple'),
         'sse': (3, 'SSE'),
         'bootstr': (2, 'Bagging'),
         'original_checkpointing': (1, 'Checkpointing'),
-        'epoch_budget': (4, '')
+        'epoch_budget': (4, ''),
+        'epoch_budget_300': (5, '')
     }
     experiments = sorted(experiments, key=lambda x: display_name_order[os.path.basename(x)][0])
 
@@ -445,6 +449,8 @@ def create_table_results(path, m, use_case, model_type):
                         max_acc = max_
                         max_idx = ensemble_results['results']['uniform_last_per_model'][0][-1][0]
             exp_name = f'Ep.b. ()'
+            if '300' in e:
+                exp_name += ' 300'
             print(f"Best Epoch budget ensemble size: {max_idx}")
             m = max_idx
             e = os.path.join(e, f'{max_idx:02d}')
@@ -479,18 +485,14 @@ def create_table_results(path, m, use_case, model_type):
                 tnd_all_mv = (round(ensemble_results['results']['tnd_all_per_model'][0][max_m_to_evaluate][1], round_digits),
                               ensemble_results['results']['tnd_all_per_model'][0][max_m_to_evaluate][0])
 
-                # Get the maximum of the last and all performances for TND
-                max_tnd_sa = (max(tnd_last_sa[0], tnd_all_sa[0]), tnd_all_sa[1])
-                max_tnd_mv = (max(tnd_last_mv[0], tnd_all_mv[0]), tnd_all_mv[1])
-
                 performances_str = (f"{uni_last_sa[0]}[{uni_last_sa[1]}] & "
                                     f"{tnd_last_sa[0]}[{tnd_last_sa[1]}] & "
                                     f"{uni_all_sa[0]}[{uni_all_sa[1]}] & "
                                     f"{tnd_all_sa[0]}[{tnd_all_sa[1]}]")
             else:
-                max_tnd_sa = tnd_last_sa
-                max_tnd_mv = tnd_last_mv
                 performances_str = f"{uni_last_sa[0]}[{uni_last_sa[1]}] & {tnd_last_sa[0]}[{tnd_last_sa[1]}] & - & -"
+                tnd_all_sa = ("-", 0)
+                tnd_all_mv = ("-", 0)
 
             bayesian_ref = f"{use_case_data['baseline_acc'][0]}"
             # Find ensemble size as [0-9] in baseline name, e.g. [10]
@@ -502,7 +504,7 @@ def create_table_results(path, m, use_case, model_type):
             unf_bound = round(1 - df_risks['unf_tnd'][0], round_digits)
             tnd_bound = round(1 - df_risks['tnd_tnd'][0], round_digits)
 
-        table_bounds.append(f"{exp_name} & {unf_bound} & {tnd_bound} & {max_tnd_sa[0]} & {max_tnd_mv[0]} \\\\")
+        table_bounds.append(f"{exp_name} & {unf_bound} & {tnd_bound} & {tnd_last_sa[0]} & {tnd_last_mv[0]} & {tnd_all_sa[0]} & {tnd_all_mv[0]} \\\\")
         table_performances.append(
             f"{exp_name} & {performances_str} & {round(ensemble_results['best_single_model_accuracy'], round_digits)} & {bayesian_ref} \\\\")
 
@@ -553,9 +555,9 @@ def main():
     if args.pac_bayes:
         plot_pac_bayes(args.path)
     if args.performances:
-        plot_performances(args.path, args.m, use_case, model_type)
+        plot_performances(args.path, args.num_ensemble_members, use_case, model_type)
     if args.table:
-        create_table_results(args.path, args.m, use_case, model_type)
+        create_table_results(args.path, args.num_ensemble_members, use_case, model_type)
 
 
 if __name__ == '__main__':

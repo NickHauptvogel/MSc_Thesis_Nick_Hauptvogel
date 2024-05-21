@@ -46,7 +46,7 @@ def print_accuracies(path):
 
 def create_plots_folder(path):
     """
-    Create a folder with all .pdf files in the given path
+    Create a folder with all .pdf files from the given path
     """
     # Create a tmp folder that copies all .pdf files
     tmp_folder = '../plots'
@@ -57,7 +57,7 @@ def create_plots_folder(path):
     pdf_files = []
     for root, dirs, files in os.walk(path):
         for file in files:
-            if file.endswith('ensemble_accs.pdf') or file.endswith('risk_weights.pdf'):
+            if (file.endswith('ensemble_accs.pdf') or file.endswith('risk_weights.pdf')) and 'large' not in root and 'old' not in root:
                 pdf_files.append(os.path.join(root, file))
 
     print(len(pdf_files))
@@ -68,7 +68,7 @@ def create_plots_folder(path):
 
 
 if __name__ == '__main__':
-    path = ""
-    create_plots_folder(path)
+    path = r""
+    #create_plots_folder(path)
     #print_accuracies()
-    #sort_epoch_budget_folders()
+    #sort_epoch_budget_folders(path)
