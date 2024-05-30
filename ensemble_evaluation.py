@@ -136,18 +136,16 @@ def ensemble_evaluation(use_case: str,
                         num_ensemble_members: int,
                         checkpoints_per_model:int,
                         reps: int,
-                        include_lam: bool,
                         pac_bayes: bool = True,
                         tta: bool = False,
                         test_set_cv: bool = True,
-                        test_pred_file_name='test_predictions.pkl',
                         start_size=2):
 
     max_ensemble_size = num_ensemble_members * checkpoints_per_model
     y_test, num_classes = get_y_test(use_case)
 
     # Load the predictions
-    y_pred = load_all_predictions(folder, max_ensemble_size, test_pred_file_name)
+    y_pred = load_all_predictions(folder, max_ensemble_size)
 
     # Special case ub: Does not have last batch
     if len(y_pred) < len(y_test):
@@ -176,12 +174,8 @@ def ensemble_evaluation(use_case: str,
         categories.append('uniform_all_per_model')
     if pac_bayes:
         categories.append('tnd_last_per_model')
-        if include_lam:
-            categories.append('lam_last_per_model')
         if checkpoints_per_model > 1:
             categories.append('tnd_all_per_model')
-            if include_lam:
-                categories.append('lam_all_per_model')
 
     # Track the best single model accuracy (can change if test set is subsampled)
     best_single_model_accuracy = 0.0
@@ -229,24 +223,26 @@ def ensemble_evaluation(use_case: str,
                     y_test_ = y_test[test_risk_indices]
 
                     weights = None
-                    if 'tnd' in category or 'lam' in category:
+                    if 'tnd' in category:
+                        if 'last_per_model' in category:
+                            save = len(indices) == num_ensemble_members
+                        elif 'all_per_model' in category:
+                            save = len(indices) == max_ensemble_size
+                        else:
+                            save = False
                         rhos, pac_results = optimize(use_case,
                                                      len(indices),
-                                                     f'TEST_SET_{i}',
+                                                     f'TEST_SET_{i}_{category}',
                                                      'iRProp',
                                                      1,
                                                      'DUMMY',
                                                      folder,
-                                                     (len(indices) == max_ensemble_size),
+                                                     save,
                                                      indices=indices,
                                                      test_risk_indices=test_risk_indices,
-                                                     test_bound_indices=test_bound_indices,
-                                                     test_pred_file_name=test_pred_file_name)
+                                                     test_bound_indices=test_bound_indices)
                         # Get the weights
-                        if 'tnd' in category:
-                            weights = rhos[1]
-                        elif 'lam' in category:
-                            weights = rhos[0]
+                        weights = rhos[1]
 
                     (ensemble_acc_maj_vote,
                      ensemble_acc_softmax_average,
@@ -295,12 +291,12 @@ def ensemble_evaluation(use_case: str,
                              ensemble_auc_std)
 
     # Save results
-    with open(os.path.join(folder, 'ensemble_results.pkl'), 'wb') as f:
-        pickle.dump({
-            'best_single_model_accuracy': best_single_model_accuracy,
-            'best_single_model_loss': best_single_model_loss,
-            'results': results,
-        }, f)
+    #with open(os.path.join(folder, 'ensemble_results.pkl'), 'wb') as f:
+    #    pickle.dump({
+    #        'best_single_model_accuracy': best_single_model_accuracy,
+    #        'best_single_model_loss': best_single_model_loss,
+    #        'results': results,
+    #    }, f)
 
 
 def main():
@@ -313,17 +309,14 @@ def main():
     parser.add_argument('-cp', '--checkpoints_per_model', type=int, default=1,
                         help='Number of checkpoints per independent model')
     parser.add_argument('--reps', type=int, help='Number of repetitions', default=5)
-    parser.add_argument('--test_pred_file_name', type=str,
-                        help='Name of the test prediction file', default='test_predictions.pkl')
-    parser.add_argument('--include_lam', action='store_true', help='Include lambda in the ensemble')
+    parser.add_argument('--start_size', type=int, help='Start size of ensemble', default=2)
 
     args = parser.parse_args()
     path = args.path
     num_ensemble_members = args.num_ensemble_members
     checkpoints_per_model = args.checkpoints_per_model
     reps = args.reps
-    test_pred_file_name = args.test_pred_file_name
-    include_lam = args.include_lam
+    start_size = args.start_size
 
     # Find any config.json in path recursively
     for root, dirs, files in os.walk(path):
@@ -341,7 +334,7 @@ def main():
                     break
 
     if 'epoch_budget' in path:
-        for i in range(2, num_ensemble_members+1):
+        for i in range(start_size, num_ensemble_members+1):
             print(f'Ensemble size: {i}')
             path_ = os.path.join(path, f'{i:02d}')
             models = 0
@@ -358,8 +351,6 @@ def main():
                                 checkpoints_per_model=checkpoints_per_model,
                                 use_case=use_case,
                                 reps=reps,
-                                include_lam=include_lam,
-                                test_pred_file_name=test_pred_file_name,
                                 start_size=models)
     else:
         ensemble_evaluation(folder=path,
@@ -367,8 +358,7 @@ def main():
                             checkpoints_per_model=checkpoints_per_model,
                             use_case=use_case,
                             reps=reps,
-                            include_lam=include_lam,
-                            test_pred_file_name=test_pred_file_name)
+                            start_size=start_size)
 
 
 if __name__ == '__main__':

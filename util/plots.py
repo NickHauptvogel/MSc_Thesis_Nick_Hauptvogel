@@ -36,7 +36,7 @@ use_case_display = {
 
 
 def get_use_case_data(use_case: str, model_type: str = None):
-    ylim_loss = (0., 1.)
+    ylim_loss = (0., 0.)
 
     baseline_acc = None
     baseline_loss = None
@@ -46,7 +46,6 @@ def get_use_case_data(use_case: str, model_type: str = None):
         ylim = (0.9, 0.975)
         if model_type == 'ResNet20v1':
             ylim = (0.85, 0.95)
-            ylim_loss = (0.15, 1.)
             baseline_acc = [0.9363]
             baseline_loss = [0.217]
             baseline_name = ['cSGHMC-ap[27]']
@@ -69,7 +68,6 @@ def get_use_case_data(use_case: str, model_type: str = None):
         baseline_loss = [0.3044]
         baseline_name = ['cSGHMC-ap[7]']
         ylim = (0.83, 0.88)
-        ylim_loss = (0.25, 1.0)
     elif use_case == 'retinopathy':
         baseline_acc = [0.909, 0.916, 0.886, 0.903]
         baseline_auc = [0.914, 0.925, 0.874, 0.903]
@@ -215,42 +213,41 @@ def plot_pac_bayes(outpath):
 
     for outpath in pac_bayes_folders:
         # Load the distribution of weights and accuracies
-        rhos_file = [f for f in os.listdir(outpath) if f.endswith('rhos.csv')][0]
-        risks_file = [f for f in os.listdir(outpath) if f.endswith('iRProp.csv')][0]
-        df_rhos = pd.read_csv(outpath + rhos_file, sep=';')
-        every_ = get_x_ticks(len(df_rhos['h']))
-        # 3 subplots
-        fig, ax = plt.subplots(3, 1, figsize=(5, 3))
-        for a in ax:
-            plt.setp(a.spines.values(), color='#DDDDDD')
-            a.grid(which='major', color='#EEEEEE', linewidth=0.8, zorder=0)
-        # Plot the accuracy for each member in subplot 1 as bar plot without spacing between the bars
-        ax[0].bar(df_rhos['h'], 1 - df_rhos['risk'], label='Accuracy', color='#222222', width=1.05, zorder=3)
-        # Plot the weights
-        ax[1].bar(df_rhos['h'], df_rhos['rho_lam'], label='FO', color=colors['uniform_last_per_model'], zorder=3)
-        ax[2].bar(df_rhos['h'], df_rhos['rho_mv2'], label='TND', color=colors['tnd_last_per_model'], zorder=3)
+        rhos_files = [f for f in os.listdir(outpath) if f.endswith('rhos.csv')]
+        for rhos_file in rhos_files:
+            df_rhos = pd.read_csv(outpath + rhos_file, sep=';')
+            every_ = get_x_ticks(len(df_rhos['h']))
+            # 3 subplots
+            fig, ax = plt.subplots(3, 1, figsize=(5, 3))
+            for a in ax:
+                plt.setp(a.spines.values(), color='#DDDDDD')
+                a.grid(which='major', color='#EEEEEE', linewidth=0.8, zorder=0)
+            # Plot the accuracy for each member in subplot 1 as bar plot without spacing between the bars
+            ax[0].bar(df_rhos['h'], 1 - df_rhos['risk'], label='Accuracy', color='#222222', width=1.05, zorder=3)
+            # Plot the weights
+            ax[1].bar(df_rhos['h'], df_rhos['rho_lam'], label='FO', color=colors['uniform_last_per_model'], zorder=3)
+            ax[2].bar(df_rhos['h'], df_rhos['rho_mv2'], label='TND', color=colors['tnd_last_per_model'], zorder=3)
 
-        # x axis label for last subplot
-        ax[2].set_xlabel('M')
-        ax[0].set_ylabel(r'$\hat{A}$')
-        ax[1].set_ylabel('ρ')
-        ax[2].set_ylabel('ρ')
+            # x axis label for last subplot
+            ax[2].set_xlabel('M')
+            ax[0].set_ylabel(r'$\hat{A}$')
+            ax[1].set_ylabel('ρ')
+            ax[2].set_ylabel('ρ')
 
-        for a in ax:
-            a.set_xticks(np.arange(1, len(df_rhos['h']) + 1, 1))
-            # Labels: Every xth label is shown, starting from the xth label
-            labels = [""] * len(df_rhos['h'])
-            for i in range(1, len(df_rhos['h']) + 1):
-                if i % every_ == 0:
-                    labels[i - 1] = str(i)
-            a.set_xticklabels(labels)
-            a.tick_params(color='#DDDDDD', which='both')
-            a.set_xlim(0.5, len(df_rhos['h']) + 0.5)
+            for a in ax:
+                a.set_xticks(np.arange(1, len(df_rhos['h']) + 1, 1))
+                # Labels: Every xth label is shown, starting from the xth label
+                labels = [""] * len(df_rhos['h'])
+                for i in range(1, len(df_rhos['h']) + 1):
+                    if i % every_ == 0:
+                        labels[i - 1] = str(i)
+                a.set_xticklabels(labels)
+                a.tick_params(color='#DDDDDD', which='both')
+                a.set_xlim(0.5, len(df_rhos['h']) + 0.5)
 
-        #plt.suptitle('Accuracy and weight distribution for ensemble')
-        plt.tight_layout()
-        plt.savefig(outpath + 'risk_weights.pdf')
-        plt.close()
+            plt.tight_layout()
+            plt.savefig(os.path.join(outpath, rhos_file.replace('.csv', '.pdf')))
+            plt.close()
 
 
 def plot_performances(folder, m, use_case, model_type):
@@ -285,15 +282,18 @@ def plot_performances(folder, m, use_case, model_type):
                     results_dict[category] = ([], [], [], [], [], [], [], [])
 
                 # Take last value of each metric (only biggest ensemble computed per epoch budget step)
-                (mean, std, l_mean, l_std, div_mean, div_std, auc_mean, auc_std) = results[category]
-                results_dict[category][0].append((i, mean[-1][1], mean[-1][2]))
-                results_dict[category][1].append((i, std[-1][1], std[-1][2]))
-                results_dict[category][2].append((i, l_mean[-1][1]))
-                results_dict[category][3].append((i, l_std[-1][1]))
-                results_dict[category][4].append((i, div_mean[-1][1]))
-                results_dict[category][5].append((i, div_std[-1][1]))
-                results_dict[category][6].append((i, auc_mean[-1][1]))
-                results_dict[category][7].append((i, auc_std[-1][1]))
+                results_dict[category][0].append((i, results[category][0][-1][1], results[category][0][-1][2]))
+                results_dict[category][1].append((i, results[category][1][-1][1], results[category][1][-1][2]))
+                results_dict[category][2].append((i, results[category][2][-1][1]))
+                results_dict[category][3].append((i, results[category][3][-1][1]))
+                results_dict[category][4].append((i, results[category][4][-1][1]))
+                results_dict[category][5].append((i, results[category][5][-1][1]))
+                if len(results[category]) == 6:
+                    results_dict[category][6].append((i, 0))
+                    results_dict[category][7].append((i, 0))
+                else:
+                    results_dict[category][6].append((i, results[category][6][-1][1]))
+                    results_dict[category][7].append((i, results[category][7][-1][1]))
         categories = results_dict.keys()
         best_single_model_accuracy = None
         best_single_model_loss = None
@@ -424,6 +424,7 @@ def create_table_results(path, m, use_case, model_type):
     }
     experiments = sorted(experiments, key=lambda x: display_name_order[os.path.basename(x)][0])
 
+    table_sa_mv = []
     table_bounds = []
     table_performances = []
     for e in experiments:
@@ -458,9 +459,30 @@ def create_table_results(path, m, use_case, model_type):
             exp_name = display_name_order[os.path.basename(e)][1]
         # Get the pac-bayes folder
         pac_bayes = [f.path for f in os.scandir(e) if f.name == 'pac-bayes'][0]
-        # Load the data
-        risks_file = [f for f in os.listdir(pac_bayes) if f.endswith('iRProp.csv')][0]
-        df_risks = pd.read_csv(os.path.join(pac_bayes, risks_file), sep=';')
+        # Get the bounds
+        last_risks_files = [f for f in os.listdir(pac_bayes) if f.endswith('last_per_model-iRProp.csv')]
+        if len(last_risks_files) == 0:
+            print(f"No PAC-Bayes files found in {pac_bayes}")
+            continue
+        # Two dataframes from both test set splits
+        df_risks = [pd.read_csv(os.path.join(pac_bayes, f), sep=';') for f in last_risks_files]
+        # Average the bounds
+        df_risks = pd.concat(df_risks).groupby(level=0).mean()
+        unf_last_bound = round(1 - df_risks['unf_tnd'][0], round_digits)
+        tnd_last_bound = round(1 - df_risks['tnd_tnd'][0], round_digits)
+
+        all_risks_files = [f for f in os.listdir(pac_bayes) if f.endswith('all_per_model-iRProp.csv')]
+        if len(all_risks_files) == 0:
+            unf_all_bound = "-"
+            tnd_all_bound = "-"
+        else:
+            # Two dataframes from both test set splits
+            df_risks = [pd.read_csv(os.path.join(pac_bayes, f), sep=';') for f in all_risks_files]
+            # Average the bounds
+            df_risks = pd.concat(df_risks).groupby(level=0).mean()
+            unf_all_bound = round(1 - df_risks['unf_tnd'][0], round_digits)
+            tnd_all_bound = round(1 - df_risks['tnd_tnd'][0], round_digits)
+
         # Open ensemble_results.pkl
         with open(os.path.join(e, 'ensemble_results.pkl'), 'rb') as f:
             ensemble_results = pickle.load(f)
@@ -501,12 +523,13 @@ def create_table_results(path, m, use_case, model_type):
                 ensemble_size = ensemble_size[0][1:-1]
                 bayesian_ref += f"[{ensemble_size}]"
 
-            unf_bound = round(1 - df_risks['unf_tnd'][0], round_digits)
-            tnd_bound = round(1 - df_risks['tnd_tnd'][0], round_digits)
+        table_sa_mv.append(f"& {exp_name} & {tnd_last_sa[0]} & {tnd_last_mv[0]} & {tnd_all_sa[0]} & {tnd_all_mv[0]} \\\\")
+        table_bounds.append(f"& {exp_name} & {unf_last_bound} & {tnd_last_bound} & {unf_all_bound} & {tnd_all_bound} \\\\")
+        table_performances.append(f"& {exp_name} & {performances_str} & {round(ensemble_results['best_single_model_accuracy'], round_digits)} & {bayesian_ref} \\\\")
 
-        table_bounds.append(f"{exp_name} & {unf_bound} & {tnd_bound} & {tnd_last_sa[0]} & {tnd_last_mv[0]} & {tnd_all_sa[0]} & {tnd_all_mv[0]} \\\\")
-        table_performances.append(
-            f"{exp_name} & {performances_str} & {round(ensemble_results['best_single_model_accuracy'], round_digits)} & {bayesian_ref} \\\\")
+    print("Softmax average and majority vote:")
+    for t in table_sa_mv:
+        print(t)
 
     print("Bounds:")
     for t in table_bounds:

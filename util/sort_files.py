@@ -48,6 +48,8 @@ def create_plots_folder(path):
     """
     Create a folder with all .pdf files from the given path
     """
+    file_names = ['ensemble_accs.pdf', 'ensemble_aucs.pdf', 'risk_weights.pdf', 'ensemble_accs_majority_vote.pdf', 'ensemble_losses.pdf', 'loss.pdf', 'accuracy.pdf']
+    unconsidered_folders = ['large', 'old'] + [f'epoch_budget\\{i:02d}' for i in range(1, 25)]
     # Create a tmp folder that copies all .pdf files
     tmp_folder = '../plots'
     if os.path.exists(tmp_folder):
@@ -57,7 +59,7 @@ def create_plots_folder(path):
     pdf_files = []
     for root, dirs, files in os.walk(path):
         for file in files:
-            if (file.endswith('ensemble_accs.pdf') or file.endswith('risk_weights.pdf')) and 'large' not in root and 'old' not in root:
+            if file in file_names and all([folder not in root for folder in unconsidered_folders]):
                 pdf_files.append(os.path.join(root, file))
 
     print(len(pdf_files))
@@ -68,7 +70,34 @@ def create_plots_folder(path):
 
 
 if __name__ == '__main__':
-    path = r""
+    path = r"C:\Users\NHaup\OneDrive\Desktop\tmp2"
+    import numpy as np
+    best = 0
+    best_temp = 0
+    # For each file in directory
+    for file in os.listdir(path):
+        # Open the file
+        accs = []
+        with open(os.path.join(path, file), 'r') as f:
+            # Read all lines
+            lines = f.readlines()
+            # Find Test set metrics: line
+            for i, line in enumerate(lines):
+                if 'Test set metrics:' in line:
+                    # Get the line 19 lines below
+                    accs.append(float(lines[i+19].split()[-1]))
+                if "* * * Run sgmcmc for seed = 1" in line:
+                    temp_str = line
+
+            print(np.mean(accs))
+
+            if np.mean(accs) > best:
+                best = np.mean(accs)
+                best_temp = temp_str
+    print("Best accuracy:")
+    print(best)
+    print(best_temp)
+
     #create_plots_folder(path)
     #print_accuracies()
     #sort_epoch_budget_folders(path)

@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import sys
 import tensorflow as tf
 import keras
 from keras.optimizers import Adam, SGD
@@ -446,10 +447,6 @@ for file in checkpoint_files:
         model.load_weights(os.path.join(model_dir, file))
 
     # Score trained model.
-    #image = next(test_loader_x_only)
-    #image = tf.convert_to_tensor(image, dtype=tf.uint8)
-    #image = tf.image.convert_image_dtype(image, tf.float32)
-    #y_pred = model.predict(image)
     test_scores = model.evaluate(test_loader, verbose=0)
     y_pred = model.predict(test_loader_x_only)
     print('Test score:', test_scores[0])
