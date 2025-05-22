@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 import os
 import pickle
+import sys
 import argparse
 import json
 from tqdm import tqdm
@@ -10,6 +11,7 @@ from MajorityVoteBounds.NeurIPS2020.optimize import optimize
 
 
 def get_y_test(use_case):
+    y_train = None
     if use_case == 'cifar10':
         num_classes = 10
         from keras.datasets import cifar10
@@ -24,7 +26,7 @@ def get_y_test(use_case):
         num_classes = 1
         max_features = 20000
         from keras.datasets import imdb
-        _, (_, y_test) = imdb.load_data(num_words=max_features)
+        (_, y_train), (_, y_test) = imdb.load_data(num_words=max_features)
     elif use_case == 'retinopathy':
         dataset_path = '../Datasets/Diabetic_Retinopathy'
         num_classes = 1
@@ -34,7 +36,7 @@ def get_y_test(use_case):
     else:
         raise ValueError('Unknown use case')
 
-    return y_test, num_classes
+    return y_test, num_classes, y_train
 
 
 def get_prediction(y_pred, y_test, indices, weights, num_classes):
@@ -139,12 +141,21 @@ def ensemble_evaluation(use_case: str,
                         pac_bayes: bool = True,
                         tta: bool = False,
                         test_set_cv: bool = True,
-                        start_size=2):
+                        start_size=2,
+                        val_split=None,
+                        validation_data_for_early_stopping_and_rho_optimization: bool = False):
 
     max_ensemble_size = num_ensemble_members * checkpoints_per_model
-    y_test, num_classes = get_y_test(use_case)
+    y_test, num_classes, y_train = get_y_test(use_case)
 
-    # Load the predictions
+    # SPECIAL CASE INSERTED AFTER REVIEW
+    y_val, y_pred_val = None, None
+    if validation_data_for_early_stopping_and_rho_optimization:
+        val_split = 0.8
+        y_val = y_train[int(val_split * len(y_train)):]
+        y_pred_val = load_all_predictions(folder, max_ensemble_size, 'val_predictions.pkl')
+
+    # Load the test predictions
     y_pred = load_all_predictions(folder, max_ensemble_size)
 
     # Special case ub: Does not have last batch
@@ -157,6 +168,8 @@ def ensemble_evaluation(use_case: str,
 
     # "Test set cross-validation": Repeat 2 times to decrease variance (swap)
     # Same data set for all methods
+    if test_set_cv and validation_data_for_early_stopping_and_rho_optimization:
+        sys.exit('Cannot use test set cross-validation and validation data for early stopping and rho optimization at the same time')
     if test_set_cv:
         # Random select 50% of test set
         half = np.random.choice(y_test.shape[0], int(y_test.shape[0] / 2), replace=False)
@@ -164,7 +177,7 @@ def ensemble_evaluation(use_case: str,
         test_splits = [(half, rest), (rest, half)]
     else:
         # Take full test set
-        test_splits = [(np.arange(y_test.shape[0]), np.arange(y_test.shape[0]))]
+        test_splits = [(None, None)]
 
     results = {}
     categories = ['uniform_last_per_model']
@@ -172,6 +185,8 @@ def ensemble_evaluation(use_case: str,
         categories.append('uniform_tta_last_per_model')
     if checkpoints_per_model > 1:
         categories.append('uniform_all_per_model')
+        if validation_data_for_early_stopping_and_rho_optimization:
+            categories.append('uniform_best_checkpoint_per_model')
     if pac_bayes:
         categories.append('tnd_last_per_model')
         if checkpoints_per_model > 1:
@@ -208,6 +223,16 @@ def ensemble_evaluation(use_case: str,
                     indices = [i * checkpoints_per_model + checkpoints_per_model - 1 for i in indices]
                 elif 'all_per_model' in category:
                     indices = [i * checkpoints_per_model + j for i in indices for j in range(checkpoints_per_model)]
+                elif 'best_checkpoint_per_model' in category:
+                    # Get all checkpoints for each index and choose the one with the highest validation accuracy
+                    model_indices = indices
+                    indices = []
+                    for model_index in model_indices:
+                        checkpoint_indices = [model_index * checkpoints_per_model + j for j in range(checkpoints_per_model)]
+                        y_pred_val_checkpoint = y_pred_val[:, checkpoint_indices, 0]
+                        y_pred_val_checkpoint = (y_pred_val_checkpoint > 0.5).astype(int)
+                        best_checkpoint_index = np.argmax([np.mean(y_pred_val_checkpoint[:, i] == y_val) for i in range(checkpoints_per_model)])
+                        indices.append(model_index * checkpoints_per_model + best_checkpoint_index)
 
                 per_ensemble_accs_maj_vote = []
                 per_ensemble_accs_softmax_average = []
@@ -216,15 +241,18 @@ def ensemble_evaluation(use_case: str,
                 per_ensemble_auc = []
                 for i, (test_risk_indices, test_bound_indices) in enumerate(test_splits):
 
-                    if 'tta' in category:
-                        y_pred_ = y_pred_tta[test_risk_indices]
-                    else:
-                        y_pred_ = y_pred[test_risk_indices]
-                    y_test_ = y_test[test_risk_indices]
+                    y_pred_ = y_pred
+                    y_test_ = y_test
+                    if test_risk_indices is not None:
+                        if 'tta' in category:
+                            y_pred_ = y_pred_tta[test_risk_indices]
+                        else:
+                            y_pred_ = y_pred[test_risk_indices]
+                        y_test_ = y_test[test_risk_indices]
 
                     weights = None
                     if 'tnd' in category:
-                        if 'last_per_model' in category:
+                        if 'last_per_model' in category or 'best_checkpoint_per_model' in category:
                             save = len(indices) == num_ensemble_members
                         elif 'all_per_model' in category:
                             save = len(indices) == max_ensemble_size
@@ -240,7 +268,8 @@ def ensemble_evaluation(use_case: str,
                                                      save,
                                                      indices=indices,
                                                      test_risk_indices=test_risk_indices,
-                                                     test_bound_indices=test_bound_indices)
+                                                     test_bound_indices=test_bound_indices,
+                                                     val_split=val_split)
                         # Get the weights
                         weights = rhos[1]
 
@@ -291,25 +320,26 @@ def ensemble_evaluation(use_case: str,
                              ensemble_auc_std)
 
     # Save results
-    #with open(os.path.join(folder, 'ensemble_results.pkl'), 'wb') as f:
-    #    pickle.dump({
-    #        'best_single_model_accuracy': best_single_model_accuracy,
-    #        'best_single_model_loss': best_single_model_loss,
-    #        'results': results,
-    #    }, f)
+    with open(os.path.join(folder, 'ensemble_results.pkl'), 'wb') as f:
+        pickle.dump({
+            'best_single_model_accuracy': best_single_model_accuracy,
+            'best_single_model_loss': best_single_model_loss,
+            'results': results,
+        }, f)
 
 
 def main():
     # Configuration
     parser = argparse.ArgumentParser(description='Ensemble prediction')
-    parser.add_argument('--path', type=str, default='results/cifar10/resnet20/original',
+    parser.add_argument('--path', type=str, default=r'C:\Users\NHaup\OneDrive\Dokumente\Master_Studium\Semester_4\Thesis\Results\retinopathy\resnet50\original',
                         help='Folder with the models for one experiment')
-    parser.add_argument('-m', '--num_ensemble_members', type=int, default=50,
+    parser.add_argument('-m', '--num_ensemble_members', type=int, default=8,
                         help='Number of ensemble members')
-    parser.add_argument('-cp', '--checkpoints_per_model', type=int, default=1,
+    parser.add_argument('-cp', '--checkpoints_per_model', type=int, default=5,
                         help='Number of checkpoints per independent model')
     parser.add_argument('--reps', type=int, help='Number of repetitions', default=5)
     parser.add_argument('--start_size', type=int, help='Start size of ensemble', default=2)
+    parser.add_argument('--validation_data_for_early_stopping_and_rho_optimization', action='store_true')
 
     args = parser.parse_args()
     path = args.path
@@ -351,14 +381,17 @@ def main():
                                 checkpoints_per_model=checkpoints_per_model,
                                 use_case=use_case,
                                 reps=reps,
-                                start_size=models)
+                                start_size=models,
+                                validation_data_for_early_stopping_and_rho_optimization=args.validation_data_for_early_stopping_and_rho_optimization)
     else:
         ensemble_evaluation(folder=path,
                             num_ensemble_members=num_ensemble_members,
                             checkpoints_per_model=checkpoints_per_model,
                             use_case=use_case,
                             reps=reps,
-                            start_size=start_size)
+                            start_size=start_size,
+                            test_set_cv=True,
+                            validation_data_for_early_stopping_and_rho_optimization=args.validation_data_for_early_stopping_and_rho_optimization)
 
 
 if __name__ == '__main__':

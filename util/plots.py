@@ -2,6 +2,12 @@ import argparse
 import sys
 
 import matplotlib.pyplot as plt
+
+plt.rcParams.update({
+    'text.usetex': True,
+    'font.family': 'serif',
+})
+
 import matplotlib.ticker as mticker
 import json
 import numpy as np
@@ -14,17 +20,19 @@ import pickle
 linestyles = ['dotted', 'dashed', 'dashdot', (0, (3, 5, 1, 5, 1, 5)), (0, (3, 1, 1, 1))]
 
 display_categories = {
-    'uniform_last_per_model': r'AVG$_u$ last',
+    'uniform_last_per_model': r'AVG$_u$ single',
     'uniform_all_per_model': r'AVG$_u$ all',
-    'tnd_last_per_model': r'AVG$_\rho$ last',
+    'tnd_last_per_model': r'AVG$_\rho$ single',
     'tnd_all_per_model': r'AVG$_\rho$ all',
+    'uniform_best_checkpoint_per_model': r'AVG$_u$ best checkpoint',
 }
 
 colors = {
-    'uniform_last_per_model': 'darkorange',
+    'uniform_last_per_model': 'orangered',
     'uniform_all_per_model': 'peru',
     'tnd_last_per_model': 'olivedrab',
-    'tnd_all_per_model': 'darkolivegreen',
+    'tnd_all_per_model': 'steelblue',
+    'uniform_best_checkpoint_per_model': 'red',
 }
 
 use_case_display = {
@@ -42,36 +50,52 @@ def get_use_case_data(use_case: str, model_type: str = None):
     baseline_loss = None
     baseline_name = None
     baseline_auc = None
+    baseline_vertical_line = None
+    print_model_type = model_type
+    if model_type == 'ResNet20v1':
+        print_model_type = 'ResNet20'
+    elif model_type == 'ResNet110v1':
+        print_model_type = 'ResNet110'
+    elif model_type == 'ResNet50v1':
+        print_model_type = 'ResNet50'
+
     if use_case == 'cifar10':
         ylim = (0.9, 0.975)
         if model_type == 'ResNet20v1':
             ylim = (0.85, 0.95)
-            baseline_acc = [0.9363]
+            baseline_acc = [0.917] # [0.9363] in paper
             baseline_loss = [0.217]
             baseline_name = ['cSGHMC-ap[27]']
+            baseline_vertical_line = 27
         elif model_type == 'ResNet110v1':
-            baseline_acc = [0.9554, 0.9637, 0.9531]
-            baseline_name = ['SWAG[10]', 'DE[10]', 'SGD']
+            baseline_acc = [0.9554] #[0.9554, 0.9637, 0.9531]
+            baseline_name = ['SWAG[10]'] #['SWAG[10]', 'DE[10]', 'SGD']
+            baseline_vertical_line = 10
         elif model_type == 'WideResNet28-10':
-            baseline_acc = [0.9666, 0.9699, 0.963]
-            baseline_name = ['SWAG[10]', 'DE[10]', 'SGD']
+            baseline_acc = [0.9666] #[0.9666, 0.9699, 0.963]
+            baseline_name = ['SWAG[10]'] #['SWAG[10]', 'DE[10]', 'SGD']
+            baseline_vertical_line = 10
     elif use_case == 'cifar100':
         ylim = (0.70, 0.84)
         if model_type == 'ResNet110v1':
-            baseline_acc = [0.7808, 0.8241, 0.7734]
-            baseline_name = ['cSGLD[10]', 'DE[10]', 'SGD']
+            baseline_acc = [0.7808] #[0.7808, 0.8241, 0.7734]
+            baseline_name = ['cSGLD[10]'] #['cSGLD[10]', 'DE[10]', 'SGD']
+            baseline_vertical_line = 10
         elif model_type == 'WideResNet28-10':
-            baseline_acc = [0.8279, 0.8383, 0.8069]
-            baseline_name = ['SWAG[10]', 'DE[10]', 'SGD']
+            baseline_acc = [0.8279] #[0.8279, 0.8383, 0.8069]
+            baseline_name = ['SWAG[10]'] #['SWAG[10]', 'DE[10]', 'SGD']
+            baseline_vertical_line = 10
     elif use_case == 'imdb':
-        baseline_acc = [0.8703]
+        baseline_acc = [0.860] #[0.8703]
         baseline_loss = [0.3044]
         baseline_name = ['cSGHMC-ap[7]']
+        baseline_vertical_line = 7
         ylim = (0.83, 0.88)
     elif use_case == 'retinopathy':
-        baseline_acc = [0.909, 0.916, 0.886, 0.903]
-        baseline_auc = [0.914, 0.925, 0.874, 0.903]
-        baseline_name = ['MC-Dr. [5]', 'MC-Dr. DE [15]', 'MAP', 'DE[3]']
+        baseline_acc = [0.909] #[0.909, 0.916, 0.886, 0.903]
+        baseline_auc = [0.914] #[0.914, 0.925, 0.874, 0.903]
+        baseline_name = ['MC-Dr.[5]'] #['MC-Dr.[5]', 'MC-Dr.DE [15]', 'MAP', 'DE[3]']
+        baseline_vertical_line = 5
         ylim = (0.70, 0.92)
     else:
         raise ValueError('Unknown use case')
@@ -82,7 +106,9 @@ def get_use_case_data(use_case: str, model_type: str = None):
         'baseline_acc': baseline_acc,
         'baseline_loss': baseline_loss,
         'baseline_name': baseline_name,
-        'baseline_auc': baseline_auc
+        'baseline_auc': baseline_auc,
+        'baseline_vertical_line': baseline_vertical_line,
+        'print_model_type': print_model_type,
     }
 
 
@@ -229,10 +255,10 @@ def plot_pac_bayes(outpath):
             ax[2].bar(df_rhos['h'], df_rhos['rho_mv2'], label='TND', color=colors['tnd_last_per_model'], zorder=3)
 
             # x axis label for last subplot
-            ax[2].set_xlabel('M')
+            ax[2].set_xlabel('$M$')
             ax[0].set_ylabel(r'$\hat{A}$')
-            ax[1].set_ylabel('ρ')
-            ax[2].set_ylabel('ρ')
+            ax[1].set_ylabel(r'$\rho$')
+            ax[2].set_ylabel(r'$\rho$')
 
             for a in ax:
                 a.set_xticks(np.arange(1, len(df_rhos['h']) + 1, 1))
@@ -250,7 +276,7 @@ def plot_pac_bayes(outpath):
             plt.close()
 
 
-def plot_performances(folder, m, use_case, model_type):
+def plot_performances(folder, m, use_case, model_type, skip_baseline_plot):
     """
     Plot the performances of the different ensemble methods.
 
@@ -357,7 +383,7 @@ def plot_performances(folder, m, use_case, model_type):
                     # Std as area around the mean (Last element is the softmax average)
                     plt.fill_between(ensemble_mean[:, 0], ensemble_mean[:, -1] - ensemble_std[:, -1],
                                      ensemble_mean[:, -1] + ensemble_std[:, -1], alpha=0.3, color=color, zorder=3)
-            plt.xlabel('M')
+            plt.xlabel(r'$M$')
             plt.ylabel(y_label)
             print(min_, max_)
             if np.isfinite(max_):
@@ -367,8 +393,13 @@ def plot_performances(folder, m, use_case, model_type):
             plt.ylim(ylim)
             # Horizontal line for the accuracy of the best model
             if single_model_reference is not None:
-                plt.axhline(single_model_reference, color='orange', linestyle='--', label='SGD')
-            if use_case_data[baseline_name] is not None:
+                plt.axhline(single_model_reference, color='grey', linestyle='--', label='SGD')
+            if use_case_data[baseline_name] is not None and not skip_baseline_plot:
+                # Vertical line for the baseline accuracy
+                if use_case_data['baseline_vertical_line'] is not None:
+                    plt.axvline(use_case_data['baseline_vertical_line'], color='orange', linestyle='--', label='Reference $M$')
+                    # Print mean accuracy of the ensemble_mean at this point
+                    print(f"Mean accuracy at {use_case_data['baseline_vertical_line']}: {ensemble_mean[ensemble_mean[:, 0] == use_case_data['baseline_vertical_line'], -1][0]}")
                 # Horizontal line for baseline accuracy
                 for i, (acc, name) in enumerate(zip(use_case_data[baseline_name], use_case_data['baseline_name'])):
                     # Get a linestyle
@@ -395,7 +426,7 @@ def plot_performances(folder, m, use_case, model_type):
             ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15),
                       fancybox=False, shadow=False, frameon=False, ncol=4)
             props = dict(boxstyle='round', facecolor='white', alpha=0.5)
-            ax.text(0.02, 0.97, f"{use_case_display[use_case]} {model_type}", transform=ax.transAxes, fontsize=9,
+            ax.text(0.02, 0.97, f"{use_case_display[use_case]} {use_case_data['print_model_type']}", transform=ax.transAxes, fontsize=9,
                     verticalalignment='center', bbox=props)
             plt.savefig(os.path.join(f, filename + ".pdf"), bbox_inches="tight")
             plt.close()
@@ -488,17 +519,27 @@ def create_table_results(path, m, use_case, model_type):
             ensemble_results = pickle.load(f)
             if m is not None:
                 # Index for m either m-2 or the number of models in the ensemble
-                max_m_to_evaluate = min(m-2, len(ensemble_results['results']['uniform_last_per_model'][0])-1)
+                max_m_to_evaluate = min(m-2, len(ensemble_results['results'].get('uniform_last_per_model', [[0] * (m-2)])[0])-1)
             else:
-                max_m_to_evaluate = len(ensemble_results['results']['uniform_last_per_model'][0])-1
+                max_m_to_evaluate = len(ensemble_results['results'].get('uniform_last_per_model', [[0] * (m-2)])[0])-1
             # Softmax average
-            uni_last_sa = (round(ensemble_results['results']['uniform_last_per_model'][0][max_m_to_evaluate][2], round_digits),
-                           ensemble_results['results']['uniform_last_per_model'][0][max_m_to_evaluate][0])
-            tnd_last_sa = (round(ensemble_results['results']['tnd_last_per_model'][0][max_m_to_evaluate][2], round_digits),
-                           ensemble_results['results']['tnd_last_per_model'][0][max_m_to_evaluate][0])
-            # Majority vote
-            tnd_last_mv = (round(ensemble_results['results']['tnd_last_per_model'][0][max_m_to_evaluate][1], round_digits),
-                           ensemble_results['results']['tnd_last_per_model'][0][max_m_to_evaluate][0])
+            if any(['last_per_model' in k for k in ensemble_results['results'].keys()]):
+                uni_last_sa = (round(ensemble_results['results']['uniform_last_per_model'][0][max_m_to_evaluate][2], round_digits),
+                               ensemble_results['results']['uniform_last_per_model'][0][max_m_to_evaluate][0])
+                tnd_last_sa = (round(ensemble_results['results']['tnd_last_per_model'][0][max_m_to_evaluate][2], round_digits),
+                               ensemble_results['results']['tnd_last_per_model'][0][max_m_to_evaluate][0])
+                # Majority vote
+                tnd_last_mv = (round(ensemble_results['results']['tnd_last_per_model'][0][max_m_to_evaluate][1], round_digits),
+                               ensemble_results['results']['tnd_last_per_model'][0][max_m_to_evaluate][0])
+            else:
+                uni_last_sa = ("-", 0)
+                tnd_last_sa = ("-", 0)
+                tnd_last_mv = ("-", 0)
+            if any(['best_checkpoint' in k for k in ensemble_results['results'].keys()]):
+                uni_best_checkpoint_sa = (round(ensemble_results['results']['uniform_best_checkpoint_per_model'][0][max_m_to_evaluate][2], round_digits),
+                                          ensemble_results['results']['uniform_best_checkpoint_per_model'][0][max_m_to_evaluate][0])
+                print(f"Uniform best checkpoint: {uni_best_checkpoint_sa}")
+
             if any(['all_per_model' in k for k in ensemble_results['results'].keys()]):
                 uni_all_sa = (round(ensemble_results['results']['uniform_all_per_model'][0][max_m_to_evaluate][2], round_digits),
                               ensemble_results['results']['uniform_all_per_model'][0][max_m_to_evaluate][0])
@@ -551,6 +592,7 @@ def main():
     parser.add_argument('--pac_bayes', action='store_true', help='Plot the PAC-Bayes bounds')
     parser.add_argument('--table', action='store_true', help='Create a table with the results')
     parser.add_argument('--only_first', action='store_true', help='Only plot the first scores file')
+    parser.add_argument('--skip_baseline_plot', action='store_true', help='Skip plotting the baseline')
 
     args = parser.parse_args()
 
@@ -578,7 +620,7 @@ def main():
     if args.pac_bayes:
         plot_pac_bayes(args.path)
     if args.performances:
-        plot_performances(args.path, args.num_ensemble_members, use_case, model_type)
+        plot_performances(args.path, args.num_ensemble_members, use_case, model_type, args.skip_baseline_plot)
     if args.table:
         create_table_results(args.path, args.num_ensemble_members, use_case, model_type)
 

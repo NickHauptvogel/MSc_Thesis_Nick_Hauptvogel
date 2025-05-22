@@ -40,6 +40,7 @@ parser.add_argument('--out_folder', type=str, default='results', help='output fo
 parser.add_argument('--batch_size', type=int, default=32, help='batch size')
 parser.add_argument('--epochs', type=int, default=50, help='number of epochs')
 parser.add_argument('--validation_split', type=float, default=0.2, help='validation split')
+parser.add_argument('--random', action='store_true', help='random split')
 parser.add_argument('--checkpointing', action='store_true', help='save the best model during training')
 parser.add_argument('--checkpoint_every', type=int, default=-1, help='save the model every x epochs')
 parser.add_argument('--initial_lr', type=float, default=0.1, help='initial learning rate')
@@ -122,7 +123,7 @@ x_test = sequence.pad_sequences(x_test, maxlen=maxlen)
 
 # Split the training data into a training and a validation set
 if validation_split > 0 or bootstrapping:
-    train_indices, val_indices = split_dataset(x_train.shape[0], validation_split, bootstrap=bootstrapping, random=True)
+    train_indices, val_indices = split_dataset(x_train.shape[0], validation_split, bootstrap=bootstrapping, random=args.random)
     assert len(np.intersect1d(train_indices, val_indices)) == 0
     x_val, y_val = x_train[val_indices], y_train[val_indices]
     x_train, y_train = x_train[train_indices], y_train[train_indices]

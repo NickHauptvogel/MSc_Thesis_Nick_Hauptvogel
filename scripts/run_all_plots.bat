@@ -4,11 +4,12 @@ set options=--performances --lr_loss --only_first --pac_bayes
 :: CNN LSTM IMDB
 python .\util\plots.py --path="%results_path%\imdb\original" -m=40 %options%
 python .\util\plots.py --path="%results_path%\imdb\original_checkpointing" -m=40 %options%
+python .\util\plots.py --path="%results_path%\imdb\original_checkpointing_same_val_data" -m=30 --skip_baseline_plot %options%
 python .\util\plots.py --path="%results_path%\imdb\bootstr" -m=40 %options%
 python .\util\plots.py --path="%results_path%\imdb\sse" -m=8 %options%
 python .\util\plots.py --path="%results_path%\imdb\epoch_budget" -m=20 %options%
 :: ResNet20 CIFAR-10
-python .\util\plots.py --path="%results_path%\cifar10\resnet20\original" -m=24 %options%
+python .\util\plots.py --path="%results_path%\cifar10\resnet20\original" -m=28 %options%
 python .\util\plots.py --path="%results_path%\cifar10\resnet20\bootstr" -m=24 %options%
 python .\util\plots.py --path="%results_path%\cifar10\resnet20\sse" -m=24 %options%
 python .\util\plots.py --path="%results_path%\cifar10\resnet20\epoch_budget" -m=15 %options%

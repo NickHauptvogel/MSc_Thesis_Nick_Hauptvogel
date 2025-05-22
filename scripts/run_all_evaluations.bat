@@ -6,7 +6,7 @@ python .\ensemble_evaluation.py --path="%results_path%\imdb\bootstr" -m=40 -cp=1
 python .\ensemble_evaluation.py --path="%results_path%\imdb\sse" -m=8 -cp=10
 python .\ensemble_evaluation.py --path="%results_path%\imdb\epoch_budget" -m=20 -cp=1
 :: ResNet20 CIFAR-10
-python .\ensemble_evaluation.py --path="%results_path%\cifar10\resnet20\original" -m=24 -cp=5
+python .\ensemble_evaluation.py --path="%results_path%\cifar10\resnet20\original" -m=28 -cp=5
 python .\ensemble_evaluation.py --path="%results_path%\cifar10\resnet20\bootstr" -m=24 -cp=5
 python .\ensemble_evaluation.py --path="%results_path%\cifar10\resnet20\sse" -m=24 -cp=5
 python .\ensemble_evaluation.py --path="%results_path%\cifar10\resnet20\epoch_budget" -m=15 -cp=1

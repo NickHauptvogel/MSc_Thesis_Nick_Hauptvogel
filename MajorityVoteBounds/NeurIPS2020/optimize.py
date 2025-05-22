@@ -48,7 +48,7 @@ def main():
     optimize(DATASET, M, SMODE, OPT, REPS, inpath, ensemble_path, write_files)
 
 
-def optimize(dataset, m, smode, opt, reps, inpath, ensemble_path, write_files, indices=None, test_risk_indices=None, test_bound_indices=None, test_pred_file_name='test_predictions.pkl'):
+def optimize(dataset, m, smode, opt, reps, inpath, ensemble_path, write_files, indices=None, test_risk_indices=None, test_bound_indices=None, test_pred_file_name='test_predictions.pkl', val_split=None):
     outpath = ensemble_path + '/pac-bayes/'
     outfile_path = outpath + dataset + '-' + str(m) + '-' + str(smode) + '-' + str(opt) + '.csv'
     rhos_file_path = outpath + dataset + '-' + str(m) + '-rhos' + '.csv'
@@ -121,13 +121,20 @@ def optimize(dataset, m, smode, opt, reps, inpath, ensemble_path, write_files, i
                 trainX, testX = X
                 trainY, testY = Y
         else:
-            trainX, trainY, testX, testY = mldata.split(X, Y, 0.8, random_state=RAND)
+            trainX, trainY, testX, testY = mldata.split(X, Y, val_split, random_state=RAND)
 
         if test_risk_indices is not None and test_bound_indices is not None:
             valX = testX[test_bound_indices]
             valY = testY[test_bound_indices]
             testX = testX[test_risk_indices]
             testY = testY[test_risk_indices]
+        elif val_split is not None:
+            valX = trainX[int(val_split*trainX.shape[0]):]
+            valY = trainY[int(val_split*trainY.shape[0]):]
+            trainX = trainX[:int(val_split*trainX.shape[0])]
+            trainY = trainY[:int(val_split*trainY.shape[0])]
+        else:
+            sys.exit("ERROR: Expected val_split or test_risk_indices and test_bound_indices")
 
         C = np.unique(trainY).shape[0]
         n = (trainX.shape[0], testX.shape[0], trainX.shape[1], C)
